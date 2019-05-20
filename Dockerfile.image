@@ -1,0 +1,42 @@
+FROM zynqmp-dom0-kernel-package AS zynqmp-dom0-kernel-package
+FROM zynqmp-dom0-ramdisk-package AS zynqmp-dom0-ramdisk-package
+FROM zynqmp-domu-0-package AS zynqmp-domu-0-package
+FROM zynqmp-dt-config-package AS zynqmp-dt-config-package
+FROM zynqmp-xen-package AS zynqmp-xen-package
+
+FROM alpine:3.9
+
+COPY [ \
+  "./docker-extras/*", \
+  "/tmp/docker-build/" \
+]
+
+RUN \
+  # apk
+  apk update && \
+  \
+  apk add \
+    bash \
+    coreutils \
+    dtc \
+    file \
+    vim && \
+  \
+  # add uboot-tools from community/edge repo
+  apk add --repository http://dl-cdn.alpinelinux.org/alpine/edge/community \
+    uboot-tools && \
+  \
+  # Copy run file
+  cp /tmp/docker-build/imagebuilder_run /imagebuilder_run && \
+  chmod 755 /imagebuilder_run && \
+  \
+  # cleanup
+  cd /root && \
+  rm -rf /tmp/* && \
+  rm -f /var/cache/apk/*
+
+COPY --from=zynqmp-dom0-kernel-package /home/builder/output-zynqmp-dom0-kernel/ /home/builder/output-zynqmp-dom0-kernel/
+COPY --from=zynqmp-dom0-ramdisk-package /home/builder/output-zynqmp-dom0-ramdisk/ /home/builder/output-zynqmp-dom0-ramdisk/
+COPY --from=zynqmp-domu-0-package /home/builder/output-zynqmp-domU-0/ /home/builder/output-zynqmp-domU-0/
+COPY --from=zynqmp-dt-config-package /home/builder/output-zynqmp-dt-config/ /home/builder/output-zynqmp-dt-config/
+COPY --from=zynqmp-xen-package /home/builder/output-zynqmp-xen/ /home/builder/output-zynqmp-xen/
