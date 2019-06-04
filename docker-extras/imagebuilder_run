@@ -82,7 +82,7 @@ function filter_device_tree()
     local skip=0
     local chosen=0
 
-    mv -f $filename_dts "$filename_dts".bak
+    mv -f $filename_dts "$filename_dts".bak &> /dev/null
     dtc -I dtb -O dts $filename_dtb > $filename_dts 2>/dev/null
 
     while IFS= read -r line
