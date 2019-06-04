@@ -5,7 +5,7 @@
 ```
 $ cd imagebuilder
 
-$ docker build --force-rm --squash --file Dockerfile.image -t imagebuilder .
+$ docker build --force-rm --file Dockerfile.image -t imagebuilder .
 ```
 
 ## `/imagebuilder_run`
