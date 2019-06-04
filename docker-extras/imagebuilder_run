@@ -8,8 +8,8 @@ function add_device_tree_kernel()
     local size=$2
 
     echo "            module@$addr {" >> $temp
-	echo "                compatible = \"multiboot,kernel\", \"multiboot,module\";" >> $temp
-	echo "                reg = <0x0 "$addr" 0x0 "$size">;" >> $temp
+    echo "                compatible = \"multiboot,kernel\", \"multiboot,module\";" >> $temp
+    echo "                reg = <0x0 "$addr" 0x0 "$size">;" >> $temp
     echo "                bootargs = \"console=ttyAMA0\";" >> $temp
     echo "            };" >> $temp
 }
@@ -21,7 +21,7 @@ function add_device_tree_ramdisk()
 
     echo "            module@$addr {" >> $temp
     echo "                compatible = \"multiboot,ramdisk\", \"multiboot,module\";" >> $temp
-	echo "                reg = <0x0 "$addr" 0x0 "$size">;" >> $temp
+    echo "                reg = <0x0 "$addr" 0x0 "$size">;" >> $temp
     echo "            };" >> $temp
 }
 
@@ -32,7 +32,7 @@ function add_device_tree_passthrough()
 
     echo "            module@$addr {" >> $temp
     echo "                compatible = \"multiboot,device-tree\", \"multiboot,module\";" >> $temp
-	echo "                reg = <0x0 "$addr" 0x0 "$size">;" >> $temp
+    echo "                reg = <0x0 "$addr" 0x0 "$size">;" >> $temp
     echo "            };" >> $temp
 }
 
@@ -42,11 +42,11 @@ function add_device_tree()
     local filename=$1
 
     echo "        #address-cells = <0x2>;" >> $temp
-	echo "        #size-cells = <0x2>;" >> $temp
+    echo "        #size-cells = <0x2>;" >> $temp
     echo "        xen,xen-bootargs = \"console=dtuart dtuart=serial0 dom0_mem=700M dom0_max_vcpus=1 bootscrub=0 serrors=forward vwfi=native sched=null\";" >> $temp
     echo "        dom0 {" >> $temp
-	echo "           compatible = \"xen,linux-zimage\", \"xen,multiboot-module\";" >> $temp
-	echo "           reg = <0x0 "$dom0_kernel_addr" 0x0 "$dom0_kernel_size">;" >> $temp
+    echo "           compatible = \"xen,linux-zimage\", \"xen,multiboot-module\";" >> $temp
+    echo "           reg = <0x0 "$dom0_kernel_addr" 0x0 "$dom0_kernel_size">;" >> $temp
     echo "           bootargs = \"console=hvc0 earlycon=xen earlyprintk=xen\";" >> $temp
     echo "        };" >> $temp
 
@@ -55,10 +55,10 @@ function add_device_tree()
         echo "        domU$i {" >> $temp
         echo "            compatible = \"xen,domain\";" >> $temp
         echo "            #address-cells = <0x2>;" >> $temp
-		echo "            #size-cells = <0x2>;" >> $temp
-		echo "            memory = <0x0 0x20000>;" >> $temp
-		echo "            cpus = <0x1>;" >> $temp
-		echo "            vpl011;" >> $temp
+        echo "            #size-cells = <0x2>;" >> $temp
+        echo "            memory = <0x0 0x20000>;" >> $temp
+        echo "            cpus = <0x1>;" >> $temp
+        echo "            vpl011;" >> $temp
         add_device_tree_kernel ${domU_kernel_addr[$i]} ${domU_kernel_size[$i]}
         if test "${domU_ramdisk_addr[$i]}"
         then
