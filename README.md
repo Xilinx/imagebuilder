@@ -14,4 +14,4 @@ $ docker build --force-rm --squash --file Dockerfile.image -t imagebuilder .
 $ docker run --rm -ti -v /tmp:/tmp imagebuilder /imagebuilder_run
 ```
 
-The generated files are in `/tmp/ppp3`
+The generated files are in `/tmp/output`
