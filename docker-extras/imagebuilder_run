@@ -173,16 +173,8 @@ function check_compressed_file_type()
 
 rm -rf /tmp/output
 mkdir /tmp/output
-
-cd /home/builder
-for d in $(ls); do
-  pushd $d
-  cp * /tmp/output
-  popd
-done
-
 cd /tmp/output
-
+cp -r /home/builder/output/* .
 . config
 
 rm -f $UBOOT_SOURCE $UBOOT_SCRIPT
