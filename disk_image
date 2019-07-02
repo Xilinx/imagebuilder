@@ -1,0 +1,107 @@
+#!/bin/sh
+
+# This helps to see what is going on
+set -e -x
+
+# Used to maintain intermediary state. (Not currently used)
+DESTDIR="$(mktemp -d /tmp/imagebuilder-zynqmp.XXXXXX)"
+
+OUTDIR="/tmp/img"
+mkdir ${OUTDIR}
+
+IMG="${OUTDIR}/zynqmp.img"
+
+# NOTE: Increase vos_a to 256 to accomodate rootfs
+# 528 MiB (256 + 256 + 16)
+truncate $IMG -s 528M
+
+# create GPT partition table
+sgdisk -og $IMG
+
+# _sector_first_start needs to be aligned to 2048
+_sector_first_start=2048
+
+# _sector_first_end is obtained by running
+# ```
+# sgdisk -n 1:2048:+256M -c 1:"Linux" -t 1:8300 /tmp/img/zynqmp.img
+# ```
+_sector_first_end=526335
+
+# create linux partition
+sgdisk -n 1:$_sector_first_start:$_sector_first_end -c 1:"Linux1" -t 1:8300 $IMG
+
+# _sector_second_start is obtained by running
+# ```
+# sgdisk -F /tmp/img/zynqmp.img
+# ```
+_sector_second_start=526336
+
+# _sector_second_end is obtained by running
+# ```
+# sgdisk -n 2:526336:+256M -c 2:"Linux2" -t 2:8300 /tmp/img/zynqmp.img
+# ```
+_sector_second_end=1050623
+sgdisk -n 2:$_sector_second_start:$_sector_second_end -c 2:"Linux2" -t 2:8300 $IMG
+
+# find the first available loop device
+_loop_dev=$(losetup -f)
+
+# attach loopback device to $IMG
+losetup $_loop_dev $IMG
+
+_disksize=$(blockdev --getsize $_loop_dev)
+
+dmsetup create diskimage --table "0 $_disksize linear $_loop_dev 0"
+
+# ensure that /dev/mapper/diskimage exists
+while [ ! -b /dev/mapper/diskimage ]
+do                      
+	sleep 2
+done
+
+kpartx -a /dev/mapper/diskimage
+
+# ensure that /dev/mapper/{diskimage1,diskimage2} exists
+while [ ! -b /dev/mapper/diskimage1 ] || [ ! -b /dev/mapper/diskimage2 ]
+do
+	sleep 2
+done
+
+# format vos_a partition
+mkfs.ext4 -L vos_a -F /dev/mapper/diskimage1
+
+# format vos_b partition
+mkfs.ext4 -L vos_b -F /dev/mapper/diskimage2
+
+# 
+# ** TODO **
+#
+# # create mount point and mount vos_a
+# mkdir -p ${DESTDIR}/part/vos_a
+# mount -t ext4 /dev/mapper/diskimage2 $DESTDIR/part/vos_a
+# 
+# # Extract rootfs cpio archive into `.../part/vos_a`
+# $(cd ${DESTDIR}/part/vos_a; cpio -idm < ${DESTDIR}/output-dom0-builder/rootfs.cpio)
+# 
+# # copy over files needed in `/boot`
+# mkdir ${DESTDIR}/part/vos_a/boot
+# # linux
+# cp ${DESTDIR}/output-dom0-builder/initramfs-${_fullkver} ${DESTDIR}/part/vos_a/boot
+# cp ${DESTDIR}/output-dom0-builder/modloop-${_fullkver}   ${DESTDIR}/part/vos_a/boot
+# cp ${DESTDIR}/output-dom0-builder/vmlinuz-${_fullkver}   ${DESTDIR}/part/vos_a/boot
+# # xen
+# cp ${DESTDIR}/viryaos-xen/boot/xen-${_fullxenver}                     ${DESTDIR}/part/vos_a/boot
+# # dtb
+# cp ${DESTDIR}/viryaos.dtb                                             ${DESTDIR}/part/vos_a/boot
+# 
+# # unmount
+# sync
+# 
+# # This fails for some reason. It could work now because we are not using qemu-user
+# # fstrim $DESTDIR/part/vos_a
+# 
+# umount $DESTDIR/part/vos_a
+
+kpartx -d /dev/mapper/diskimage
+dmsetup remove diskimage
+losetup -d $_loop_dev
