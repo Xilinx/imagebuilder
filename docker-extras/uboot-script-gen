@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# LOAD_CMD="tftpb"
+# LOAD_CMD="load scsi 0:1"
+
 offset=$((2*1024*1024))
 filesize=0
 
@@ -49,8 +52,12 @@ function device_tree_editing()
     echo "fdt mknod /chosen dom0" >> $UBOOT_SOURCE
     echo "fdt set /chosen/dom0 compatible \"xen,linux-zimage\" \"xen,multiboot-module\"" >> $UBOOT_SOURCE
     echo "fdt set /chosen/dom0 reg <0x0 "$dom0_kernel_addr" 0x0 "$dom0_kernel_size">" >> $UBOOT_SOURCE
-    echo "fdt set /chosen/dom0 bootargs \"console=hvc0 earlycon=xen earlyprintk=xen\"" >> $UBOOT_SOURCE
-
+	if test "$LOAD_CMD" = "tftpb"
+	then
+		echo "fdt set /chosen/dom0 bootargs \"console=hvc0 earlycon=xen earlyprintk=xen\"" >> $UBOOT_SOURCE
+	else
+		echo "fdt set /chosen/dom0 bootargs \"console=hvc0 earlycon=xen earlyprintk=xen root=/dev/mmcblk0p2\"" >> $UBOOT_SOURCE
+	fi
     i=0
     while test $i -lt $NUM_DOMUS
     do
@@ -119,15 +126,16 @@ function check_compressed_file_type()
     check_file_type $filename "$type"
 }
 
-rm -rf /tmp/output
-mkdir /tmp/output
-cd /tmp/output
-cp -r /home/builder/output/* .
 . config
 
 rm -f $UBOOT_SOURCE $UBOOT_SCRIPT
 memaddr=$(( $MEMORY_START + $offset ))
 memaddr=`printf "0x%X\n" $memaddr`
+
+if [[ $LOAD_CMD = *scsi* ]]
+then
+	echo "scsi scan" >> $UBOOT_SOURCE
+fi
 
 check_compressed_file_type $XEN "MS-DOS executable"
 xen_addr=$memaddr
@@ -139,7 +147,7 @@ dom0_kernel_addr=$memaddr
 load_file $DOM0_KERNEL
 dom0_kernel_size=$(( $memaddr - $dom0_kernel_addr ))
 
-if test "$DOM0_RAMDISK"
+if test "$DOM0_RAMDISK" && [[ $LOAD_CMD = "tftpb" ]]
 then
     check_compressed_file_type $DOM0_RAMDISK "cpio archive"
     dom0_ramdisk_addr=$memaddr
@@ -191,5 +199,4 @@ memaddr=$(( $memaddr + $offset + $offset ))
 memaddr=`printf "0x%X\n" $memaddr`
 uboot_addr="$memaddr"
 mkimage -A arm64 -T script -C none -a $uboot_addr -e $uboot_addr -d $UBOOT_SOURCE "$UBOOT_SCRIPT" &> /dev/null
-echo "Generated uboot script $UBOOT_SCRIPT, to be loaded at address $uboot_addr:"
 echo "$LOAD_CMD $uboot_addr $UBOOT_SCRIPT; source $uboot_addr"

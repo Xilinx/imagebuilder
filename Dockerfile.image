@@ -1,9 +1,9 @@
-# FROM zynqmp-dt-config-package AS zynqmp-dt-config-package
-# FROM zynqmp-xen-package AS zynqmp-xen-package
-# FROM zynqmp-dom0-kernel-package AS zynqmp-dom0-kernel-package
-# FROM zynqmp-dom0-ramdisk-package AS zynqmp-dom0-ramdisk-package
-# FROM zynqmp-dom1-package AS zynqmp-dom1-package
-# FROM zynqmp-dom2-package AS zynqmp-dom2-package
+FROM zynqmp-dt-config-package AS zynqmp-dt-config-package
+FROM zynqmp-xen-package AS zynqmp-xen-package
+FROM zynqmp-dom0-kernel-package AS zynqmp-dom0-kernel-package
+FROM zynqmp-dom0-ramdisk-package AS zynqmp-dom0-ramdisk-package
+FROM zynqmp-dom1-package AS zynqmp-dom1-package
+FROM zynqmp-dom2-package AS zynqmp-dom2-package
 
 FROM alpine:3.9
 
@@ -33,17 +33,23 @@ RUN \
     uboot-tools && \
   \
   # Copy run file
-  cp /tmp/docker-build/imagebuilder_run /imagebuilder_run && \
-  chmod 755 /imagebuilder_run && \
+  cp /tmp/docker-build/imagebuilder_tftp /imagebuilder_tftp && \
+  cp /tmp/docker-build/imagebuilder_sd /imagebuilder_sd && \
+  cp /tmp/docker-build/uboot-script-gen /uboot-script-gen && \
+  cp /tmp/docker-build/disk_image /disk_image && \
+  chmod 755 /imagebuilder_tftp && \
+  chmod 755 /imagebuilder_sd && \
+  chmod 755 /uboot-script-gen && \
+  chmod 755 /disk_image && \
   \
   # cleanup
   cd /root && \
   rm -rf /tmp/* && \
   rm -f /var/cache/apk/*
 
-# COPY --from=zynqmp-dom0-kernel-package /home/builder/output-zynqmp-dom0-kernel/ /home/builder/output
-# COPY --from=zynqmp-dom0-ramdisk-package /home/builder/output-zynqmp-dom0-ramdisk/ /home/builder/output
-# COPY --from=zynqmp-dt-config-package /home/builder/output-zynqmp-dt-config/ /home/builder/output/
-# COPY --from=zynqmp-xen-package /home/builder/output-zynqmp-xen/ /home/builder/output
-# COPY --from=zynqmp-dom1-package /home/builder/output-zynqmp-dom1/ /home/builder/output/zynqmp-dom1/
-# COPY --from=zynqmp-dom2-package /home/builder/output-zynqmp-dom2/ /home/builder/output/zynqmp-dom2/
+COPY --from=zynqmp-dom0-kernel-package /home/builder/output-zynqmp-dom0-kernel/ /home/builder/output
+COPY --from=zynqmp-dom0-ramdisk-package /home/builder/output-zynqmp-dom0-ramdisk/ /home/builder/output
+COPY --from=zynqmp-dt-config-package /home/builder/output-zynqmp-dt-config/ /home/builder/output/
+COPY --from=zynqmp-xen-package /home/builder/output-zynqmp-xen/ /home/builder/output
+COPY --from=zynqmp-dom1-package /home/builder/output-zynqmp-dom1/ /home/builder/output/zynqmp-dom1/
+COPY --from=zynqmp-dom2-package /home/builder/output-zynqmp-dom2/ /home/builder/output/zynqmp-dom2/

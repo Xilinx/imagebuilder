@@ -5,7 +5,7 @@ set -e -x
 
 # Used to maintain intermediary state. (Not currently used)
 DESTDIR="$(mktemp -d /tmp/imagebuilder-zynqmp.XXXXXX)"
-
+UBOOT_OUT="/tmp/output"
 OUTDIR="/tmp/img"
 mkdir ${OUTDIR}
 
@@ -73,34 +73,33 @@ mkfs.ext4 -L vos_a -F /dev/mapper/diskimage1
 # format vos_b partition
 mkfs.ext4 -L vos_b -F /dev/mapper/diskimage2
 
-# 
-# ** TODO **
-#
-# # create mount point and mount vos_a
-# mkdir -p ${DESTDIR}/part/vos_a
-# mount -t ext4 /dev/mapper/diskimage2 $DESTDIR/part/vos_a
-# 
-# # Extract rootfs cpio archive into `.../part/vos_a`
-# $(cd ${DESTDIR}/part/vos_a; cpio -idm < ${DESTDIR}/output-dom0-builder/rootfs.cpio)
-# 
-# # copy over files needed in `/boot`
-# mkdir ${DESTDIR}/part/vos_a/boot
-# # linux
-# cp ${DESTDIR}/output-dom0-builder/initramfs-${_fullkver} ${DESTDIR}/part/vos_a/boot
-# cp ${DESTDIR}/output-dom0-builder/modloop-${_fullkver}   ${DESTDIR}/part/vos_a/boot
-# cp ${DESTDIR}/output-dom0-builder/vmlinuz-${_fullkver}   ${DESTDIR}/part/vos_a/boot
-# # xen
-# cp ${DESTDIR}/viryaos-xen/boot/xen-${_fullxenver}                     ${DESTDIR}/part/vos_a/boot
-# # dtb
-# cp ${DESTDIR}/viryaos.dtb                                             ${DESTDIR}/part/vos_a/boot
-# 
-# # unmount
-# sync
-# 
-# # This fails for some reason. It could work now because we are not using qemu-user
-# # fstrim $DESTDIR/part/vos_a
-# 
-# umount $DESTDIR/part/vos_a
+
+# create mount point and mount disk2
+mkdir -p ${DESTDIR}/part/disk2
+mount -t ext4 /dev/mapper/diskimage2 $DESTDIR/part/disk2
+
+# Extract rootfs cpio archive into `.../part/vos_a`
+cd ${DESTDIR}/part/disk2
+cat ${UBOOT_OUT}/dom0-ramdisk.cpio | gunzip | cpio -id
+mv ${UBOOT_OUT}/dom0-ramdisk.cpio* /tmp
+
+# umount
+sync
+cd /
+umount $DESTDIR/part/disk2
+
+# create mount point and mount disk1
+mkdir -p ${DESTDIR}/part/disk1
+mount -t ext4 /dev/mapper/diskimage1 $DESTDIR/part/disk1
+
+# copy over files needed
+cp -r $UBOOT_OUT/* ${DESTDIR}/part/disk1/
+
+# unmount
+sync
+# This fails for some reason. It could work now because we are not using qemu-user
+# fstrim $DESTDIR/part/disk1
+umount $DESTDIR/part/disk1
 
 kpartx -d /dev/mapper/diskimage
 dmsetup remove diskimage

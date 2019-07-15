@@ -1,0 +1,8 @@
+#!/bin/bash
+
+rm -rf /tmp/output
+mkdir /tmp/output
+cd /tmp/output
+cp -r /home/builder/output/* .
+export LOAD_CMD="tftpb"
+bash /uboot-script-gen
