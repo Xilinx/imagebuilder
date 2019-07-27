@@ -59,7 +59,7 @@ function device_tree_editing()
             echo "fdt set /chosen/dom0-ramdisk reg <0x0 "$dom0_ramdisk_addr" 0x0 "$dom0_ramdisk_size">" >> $UBOOT_SOURCE
         fi
     else
-        echo "fdt set /chosen/dom0 bootargs \"console=hvc0 earlycon=xen earlyprintk=xen root=/dev/mmcblk0p2\"" >> $UBOOT_SOURCE
+        echo "fdt set /chosen/dom0 bootargs \"console=hvc0 earlycon=xen earlyprintk=xen root=/dev/sda2\"" >> $UBOOT_SOURCE
     fi
 
     i=0
