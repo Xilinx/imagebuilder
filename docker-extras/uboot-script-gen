@@ -134,6 +134,11 @@ function check_compressed_file_type()
 
 rm -f $UBOOT_SOURCE $UBOOT_SCRIPT
 memaddr=$(( $MEMORY_START + $offset ))
+# 12582912 is 0xc00000, 12MB
+if test $memaddr -lt 12582912
+then
+    memaddr="12582912"
+fi
 memaddr=`printf "0x%X\n" $memaddr`
 uboot_addr=$memaddr
 # 2MB are enough for a uboot script
