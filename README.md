@@ -50,3 +50,15 @@ command:
 ```
 scsi scan; load scsi 0:1 0xc00000 boot.scr; source 0xc00000
 ```
+
+## Add additional DomUs
+
+Assuming that you have the kernel and ramdisk of another DomU already in
+`PACKAGE.md` format, you can configure Imagebuilder to start it
+automatically at boot by making the following changes:
+
+- edit `Dockerfile.image`, add the domU package to the FROM lines
+- edit `Dockerfile.image`, add the domU package to the COPY lines
+- edit `config`, adding another DomU (NUM_DOMUS, DOMU_KERNEL and DOMU_RAMDISK)
+
+Rebuild Imagebuilder and rerun imagebuilder_sd/tftp.

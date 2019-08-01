@@ -11,6 +11,7 @@ COPY [ \
   "./docker-extras/*", \
   "/tmp/docker-build/" \
 ]
+COPY config /tmp/docker-build/
 
 RUN \
   # apk
@@ -33,6 +34,7 @@ RUN \
     uboot-tools && \
   \
   # Copy run file
+  cp /tmp/docker-build/config /config && \
   cp /tmp/docker-build/imagebuilder_tftp /imagebuilder_tftp && \
   cp /tmp/docker-build/imagebuilder_sd /imagebuilder_sd && \
   cp /tmp/docker-build/uboot-script-gen /uboot-script-gen && \

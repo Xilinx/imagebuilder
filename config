@@ -1,0 +1,17 @@
+MEMORY_START="0x0"
+MEMORY_END="0x80000000"
+
+DEVICE_TREE="mpsoc.dtb"
+XEN="xen"
+DOM0_KERNEL="Image-dom0"
+DOM0_RAMDISK="dom0-ramdisk.cpio"
+
+NUM_DOMUS=2
+DOMU_KERNEL[0]="zynqmp-dom1/Image-domU"
+DOMU_RAMDISK[0]="zynqmp-dom1/domU-ramdisk.cpio"
+DOMU_PASSTHROUGH_DTB[0]="zynqmp-dom1/passthrough-example-part.dtb"
+DOMU_KERNEL[1]="zynqmp-dom2/Image-domU"
+DOMU_RAMDISK[1]="zynqmp-dom2/domU-ramdisk.cpio"
+
+UBOOT_SOURCE="boot.source"
+UBOOT_SCRIPT="boot.scr"
