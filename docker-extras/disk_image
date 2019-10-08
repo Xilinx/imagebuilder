@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # This helps to see what is going on
 set -e -x
