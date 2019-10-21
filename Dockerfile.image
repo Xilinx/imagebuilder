@@ -8,7 +8,7 @@ FROM zynqmp-dom2-package AS zynqmp-dom2-package
 FROM alpine:3.9
 
 COPY [ \
-  "./docker-extras/*", \
+  "./scripts/*", \
   "/tmp/docker-build/" \
 ]
 COPY config /tmp/docker-build/
