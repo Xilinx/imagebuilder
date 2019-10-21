@@ -6,4 +6,4 @@ cp config /tmp/output
 cp -r /home/builder/output/* /tmp/output
 cd /tmp/output
 export LOAD_CMD="tftpb"
-bash /uboot-script-gen
+bash /uboot-script-gen ./config

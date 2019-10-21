@@ -130,7 +130,12 @@ function check_compressed_file_type()
     check_file_type $filename "$type"
 }
 
-. config
+if test $# -lt 1
+then
+    echo "Usage $0 <config_file>"
+    exit 1
+fi
+source $1
 
 rm -f $UBOOT_SOURCE $UBOOT_SCRIPT
 memaddr=$(( $MEMORY_START + $offset ))
