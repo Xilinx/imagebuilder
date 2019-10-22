@@ -1,14 +1,22 @@
 # ImageBuilder
 
-Given a bunch of binaries for Xen, Dom0, and a number of Dom0-less
-DomUs, ImageBuilder generates a u-boot script that can be used to load
-all of the binaries automatically and boot the system. ImageBuilder
-takes care of calculating all loading addresses, editing device tree
-with the necessary information, and even pre-configuring a disk image
-with kernels and rootfses.
+Building an embedded virtualized system with anything more than one
+Domain can be difficult, error prone and time consuming.
 
-ImageBuilder scripts can be used stand-alone, or from an ImageBuilder
-Container.
+ImageBuilder, an Open Source collection of scripts (contributions
+encouraged), changes all that.
+
+ImageBuilder generates a U-Boot script that can be used to load all of
+the binaries automatically and boot the full system fast. Given a
+collection of binaries such as Xen, Dom0 and a number of Dom0-less
+DomUs, ImageBuilder takes care of calculating all loading addresses,
+editing device tree with the necessary information, and even
+pre-configuring a disk image with kernels and rootfses. ImageBuilder
+scripts can be used stand-alone, or from an ImageBuilder Container.
+
+ImageBuilder has been tested on Xilinx ZynqMP MPSoC boards. An
+up-to-date wikipage is also available at
+[wiki.xenproject.org](https://wiki.xenproject.org/index.php?title=ImageBuilder).
 
 
 ## Stand-alone Usage: scripts/uboot-script-gen
