@@ -5,6 +5,5 @@ mkdir /tmp/output
 cp config /tmp/output
 cp -r /home/builder/output/* /tmp/output
 cd /tmp/output
-export LOAD_CMD="load scsi 0:1"
-bash /uboot-script-gen ./config
+bash /uboot-script-gen -c ./config -d ./ -t sd
 bash /disk_image

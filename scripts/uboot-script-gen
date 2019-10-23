@@ -2,6 +2,7 @@
 
 offset=$((2*1024*1024))
 filesize=0
+prog_req=(mkimage file)
 
 function add_device_tree_kernel()
 {
@@ -130,12 +131,83 @@ function check_compressed_file_type()
     check_file_type $filename "$type"
 }
 
-if test $# -lt 1
+function check_depends()
+{
+    for ((i=0; i<${#prog_req[@]}; i++))
+    do
+        if ! command -v ${prog_req[i]} > /dev/null
+        then
+            echo "Please install the needed program: ${prog_req[i]}."
+            exit 1
+        fi
+    done
+}
+
+function print_help
+{
+    echo "usage:"
+    echo "     $0 -c CONFIG_FILE -t UBOOT_TYPE -d DIRECTORY"
+    echo "     $0 -h"
+    echo "where:"
+    echo "	CONFIG_FILE - configuration file"
+    echo "	UBOOT_TYPE can be:"
+    echo "		sd - alias for \"scsi load 0:1\" for uboot load commands"
+    echo "		tftp - alias for \"tftpb\" for uboot load cammnds"
+    echo "              < > - used for uboot load commands"
+    echo "	DIRECTORY - root directory of where the files of CONFIG_FILE"
+    echo "	-h - prints out the help message and exits "
+    echo "Defaults:"
+    echo "	CONFIG_FILE=$cfg_file, UBOOT_TYPE=\"LOAD_CMD\" env var, DIRECTORY=$uboot_dir"
+    echo "Example:"
+    echo "    $0 -c ../config -d ./build42 -t \"scsi load 1:1\""
+}
+
+while getopts ":c:t:d:h" opt; do
+    case ${opt} in
+    t )
+        case $OPTARG in
+        sd )
+            LOAD_CMD="load scsi 0:1"
+            ;;
+        tftp )
+            LOAD_CMD="tftpb"
+            ;;
+        * )
+            LOAD_CMD="$OPTARG"
+            ;;
+        esac
+        ;;
+    c )
+        cfg_file=$OPTARG
+        ;;
+    d )
+        uboot_dir=$OPTARG
+        ;;
+    h )
+        print_help
+        exit 0
+        ;;
+    * )
+        echo "Unknown option, see \"$0 -h\""
+        exit 1
+        ;;
+    esac
+done
+shift $((OPTIND -1))
+
+if [ -z "$LOAD_CMD" ] || [ -z "$cfg_file" ] || [ -z "$uboot_dir" ]
 then
-    echo "Usage $0 <config_file>"
+    echo "Undefined arguments, see \"$0 -h\""
     exit 1
 fi
-source $1
+
+check_depends
+
+source "$cfg_file"
+
+# the cd is needed so that the relative paths will match once we use
+# tftp or move the files to a partition
+cd "$uboot_dir"
 
 rm -f $UBOOT_SOURCE $UBOOT_SCRIPT
 memaddr=$(( $MEMORY_START + $offset ))
