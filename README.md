@@ -74,13 +74,13 @@ Then you can invoke uboot-script-gen as follows:
 $ bash ./scripts/uboot-script-gen -c /path/to/config-file -d . -t tftp
 ```
 
-Where:
--c specifies the path to the config file to use
+Where:\
+-c specifies the path to the config file to use\
 -d specifies the working directory (path in the config file are relative
-   to it)
+   to it)\
 -t specifies the u-boot command to load the binaries. "tftp" and "sd"
    are shorthands for "tftpb" and "load scsi 0:1", but actually any
-   arbitrary command can be used, for instance -t "fatload" is valid.
+   arbitrary command can be used, for instance -t "fatload" is valid.\
 
 
 ## Container Usage
