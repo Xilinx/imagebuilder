@@ -146,20 +146,20 @@ function check_depends()
 function print_help
 {
     echo "usage:"
-    echo "     $0 -c CONFIG_FILE -t UBOOT_TYPE -d DIRECTORY"
-    echo "     $0 -h"
+    echo "	$0 -c CONFIG_FILE -t UBOOT_TYPE -d DIRECTORY"
+    echo "	$0 -h"
     echo "where:"
     echo "	CONFIG_FILE - configuration file"
     echo "	UBOOT_TYPE can be:"
     echo "		sd - alias for \"scsi load 0:1\" for uboot load commands"
     echo "		tftp - alias for \"tftpb\" for uboot load cammnds"
-    echo "              < > - used for uboot load commands"
+    echo "		< > - used for uboot load commands"
     echo "	DIRECTORY - root directory of where the files of CONFIG_FILE"
     echo "	-h - prints out the help message and exits "
     echo "Defaults:"
     echo "	CONFIG_FILE=$cfg_file, UBOOT_TYPE=\"LOAD_CMD\" env var, DIRECTORY=$uboot_dir"
     echo "Example:"
-    echo "    $0 -c ../config -d ./build42 -t \"scsi load 1:1\""
+    echo "	$0 -c ../config -d ./build42 -t \"scsi load 1:1\""
 }
 
 while getopts ":c:t:d:h" opt; do
