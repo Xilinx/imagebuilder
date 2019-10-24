@@ -112,7 +112,7 @@ function check_file_type()
     file $filename | grep "$type" &> /dev/null
     if test $? != 0
     then
-        echo Wrong file type "$filename". It shold be "$type".
+        echo Wrong file type "$filename". It should be "$type".
     fi
 }
 
