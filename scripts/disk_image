@@ -19,6 +19,8 @@ offset=$((2*1024*1024))
 _part1_size=`stat --printf="%s" $UBOOT_OUT/$XEN`
 _part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/$DOM0_KERNEL` ))
 _part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/$DEVICE_TREE` ))
+_part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/$UBOOT_SOURCE` ))
+_part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/$UBOOT_SCRIPT` ))
 i=0
 while test $i -lt $NUM_DOMUS
 do
@@ -121,8 +123,28 @@ umount $DESTDIR/part/disk2
 mkdir -p ${DESTDIR}/part/disk1
 mount -t ext4 /dev/mapper/diskimage1 $DESTDIR/part/disk1
 
-# copy over files needed
-cp -r $UBOOT_OUT/* ${DESTDIR}/part/disk1/
+# only copy over files that were counted for the partition size
+cd "$UBOOT_OUT"
+cp --parents "$XEN" "${DESTDIR}/part/disk1/"
+cp --parents "$DOM0_KERNEL" "${DESTDIR}/part/disk1/"
+cp --parents "$DEVICE_TREE" "${DESTDIR}/part/disk1/"
+cp --parents "$UBOOT_SOURCE" "${DESTDIR}/part/disk1/"
+cp --parents "$UBOOT_SCRIPT" "${DESTDIR}/part/disk1/"
+i=0
+while test $i -lt $NUM_DOMUS
+do
+	cp --parents "${DOMU_KERNEL[$i]}" "${DESTDIR}/part/disk1/"
+	if test "${DOMU_RAMDISK[$i]}"
+	then
+		cp --parents "${DOMU_RAMDISK[$i]}" "${DESTDIR}/part/disk1/"
+	fi
+	if test "${DOMU_PASSTHROUGH_DTB[$i]}"
+	then
+		cp --parents "${DOMU_PASSTHROUGH_DTB[$i]}" "${DESTDIR}/part/disk1/"
+	fi
+	i=$(( $i + 1 ))
+done
+cd -
 
 # unmount
 sync
