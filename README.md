@@ -83,6 +83,31 @@ Where:\
    arbitrary command can be used, for instance -t "fatload" is valid.\
 
 
+## Stand-alone Usage: scripts/disk\_image
+
+The ImageBuilder script that generates a disk image file to load on a
+SD or SATA drive.  This creates 2 partitions: boot partition where the
+boot files from working directory (-c option) are, and the dom0 ramdisk
+uncompressed into the root FS partition.
+
+After you've generated the u-boot scripts using the uboot-script-gen
+script, disk_image is run as follows:
+
+```
+$ sudo bash ./scripts/disk_image -c /path/to/config-file -d . \
+                                 -w /path/to/tmp/dir          \
+                                 -o /path/to/output/disk.img
+```
+
+Where:\
+-c specifies the path to the config file to use\
+-d specifies the working directory (paths in the config file are relative
+   to it)\
+-w specifies the temporary working directory that the script uses for
+   building the disk image, and if not set, one is created in /tmp\
+-o specifies the output disk image file name\
+
+
 ## Container Usage
 
 ImageBuilder comes with a Dockerfile to build a container with all the

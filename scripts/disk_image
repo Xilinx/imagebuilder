@@ -3,17 +3,88 @@
 # This helps to see what is going on
 set -e -x
 
-# Used to maintain intermediary state. (Not currently used)
-DESTDIR="$(mktemp -d /tmp/imagebuilder-zynqmp.XXXXXX)"
-UBOOT_OUT="/tmp/output"
-OUTDIR="/tmp/img"
-mkdir ${OUTDIR}
+PROG_REQ=( kpartx mkfs.ext4 losetup sgdisk readlink )
 
-IMG="${OUTDIR}/zynqmp.img"
+function check_depends()
+{
+    for ((i=0; i<${#PROG_REQ[@]}; i++))
+    do
+        if ! command -v ${PROG_REQ[i]} > /dev/null
+        then
+            echo "Please install the needed program: ${PROG_REQ[i]}."
+            exit 1
+        fi
+    done
+}
 
-. config
+function print_help
+{
+    echo "usage:"
+    echo "	$0 -c CONFIG_FILE -d UBOOT_DIRECTORY <-w WORK_DIRECTORY> -o IMG_FILE"
+    echo "	$0 -h"
+    echo "where:"
+    echo "	-c CONFIG_FILE - configuration file"
+    echo "	-d UBOOT_DIRECTORY - root directory for the paths specified in CONFIG_FILE"
+    echo "	-w WORK_DIRECTORY - work directory used when building the image"
+    echo "	-o IMG_FILE - the output img file "
+    echo "Example:"
+    echo "	$0 -c ../config -d ./build42 -w tmp -o disk.img"
+}
+
+# before anything else, check if we have root privilege
+if ! [ $(id -u) = 0 ]
+then
+    echo "This script needs root privilege to run, exiting."
+    exit 1
+fi
+
+while getopts ":w:d:c:o:h" opt
+do
+    case ${opt} in
+    w )
+        DESTDIR=$OPTARG
+        ;;
+    d )
+        UBOOT_OUT=$OPTARG
+        ;;
+    c )
+        CFG_FILE=$OPTARG
+        ;;
+    o )
+        IMG=$OPTARG
+        ;;
+    h )
+        print_help
+        exit 0
+        ;;
+    * )
+        echo "Unknown option, see \"$0 -h\""
+        exit 1
+        ;;
+    esac
+done
+shift $((OPTIND -1))
+
+if [ -z "$UBOOT_OUT" ] || [ -z "$CFG_FILE" ] || [ -z "$IMG" ]
+then
+    echo "Undefined arguments, see \"$0 -h\""
+    exit 1
+fi
+
+# if the user hasn't specified a working directing, create it
+if [ -z "$DESTDIR" ]
+then
+    DESTDIR="$(mktemp -d /tmp/imagebuilder.XXXXXX)"
+    DESTDIR_DEL=true
+else
+    DESTDIR_DEL=false
+fi
 
 UBOOT_OUT_ABS="$(readlink -f $UBOOT_OUT)"
+
+check_depends
+
+source "$CFG_FILE"
 
 offset=$((2*1024*1024))
 _part1_size=`stat --printf="%s" $UBOOT_OUT/$XEN`
@@ -155,3 +226,8 @@ umount $DESTDIR/part/disk1
 kpartx -d /dev/mapper/diskimage
 dmsetup remove diskimage
 losetup -d $_loop_dev
+
+if [ "$DESTDIR_DEL" = true ]
+then
+    rm -rf "$DESTDIR"
+fi
