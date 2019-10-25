@@ -81,6 +81,7 @@ else
 fi
 
 UBOOT_OUT_ABS="$(readlink -f $UBOOT_OUT)"
+DESTDIR_ABS="$(readlink -f $DESTDIR)"
 
 check_depends
 
@@ -196,22 +197,22 @@ mount -t ext4 /dev/mapper/diskimage1 $DESTDIR/part/disk1
 
 # only copy over files that were counted for the partition size
 cd "$UBOOT_OUT"
-cp --parents "$XEN" "${DESTDIR}/part/disk1/"
-cp --parents "$DOM0_KERNEL" "${DESTDIR}/part/disk1/"
-cp --parents "$DEVICE_TREE" "${DESTDIR}/part/disk1/"
-cp --parents "$UBOOT_SOURCE" "${DESTDIR}/part/disk1/"
-cp --parents "$UBOOT_SCRIPT" "${DESTDIR}/part/disk1/"
+cp --parents "$XEN" "${DESTDIR_ABS}/part/disk1/"
+cp --parents "$DOM0_KERNEL" "${DESTDIR_ABS}/part/disk1/"
+cp --parents "$DEVICE_TREE" "${DESTDIR_ABS}/part/disk1/"
+cp --parents "$UBOOT_SOURCE" "${DESTDIR_ABS}/part/disk1/"
+cp --parents "$UBOOT_SCRIPT" "${DESTDIR_ABS}/part/disk1/"
 i=0
 while test $i -lt $NUM_DOMUS
 do
-    cp --parents "${DOMU_KERNEL[$i]}" "${DESTDIR}/part/disk1/"
+    cp --parents "${DOMU_KERNEL[$i]}" "${DESTDIR_ABS}/part/disk1/"
     if test "${DOMU_RAMDISK[$i]}"
     then
-        cp --parents "${DOMU_RAMDISK[$i]}" "${DESTDIR}/part/disk1/"
+        cp --parents "${DOMU_RAMDISK[$i]}" "${DESTDIR_ABS}/part/disk1/"
     fi
     if test "${DOMU_PASSTHROUGH_DTB[$i]}"
     then
-        cp --parents "${DOMU_PASSTHROUGH_DTB[$i]}" "${DESTDIR}/part/disk1/"
+        cp --parents "${DOMU_PASSTHROUGH_DTB[$i]}" "${DESTDIR_ABS}/part/disk1/"
     fi
     i=$(( $i + 1 ))
 done
