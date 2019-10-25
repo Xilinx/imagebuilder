@@ -24,16 +24,16 @@ _part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/$UBOOT_SCRIPT` ))
 i=0
 while test $i -lt $NUM_DOMUS
 do
-	_part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/${DOMU_KERNEL[$i]}` ))
-	if test "${DOMU_RAMDISK[$i]}"
-	then
-		_part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/${DOMU_RAMDISK[$i]}` ))
-	fi
-	if test "${DOMU_PASSTHROUGH_DTB[$i]}"
-	then
-		_part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/${DOMU_PASSTHROUGH_DTB[$i]}` ))
-	fi
-	i=$(( $i + 1 ))
+    _part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/${DOMU_KERNEL[$i]}` ))
+    if test "${DOMU_RAMDISK[$i]}"
+    then
+        _part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/${DOMU_RAMDISK[$i]}` ))
+    fi
+    if test "${DOMU_PASSTHROUGH_DTB[$i]}"
+    then
+        _part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/${DOMU_PASSTHROUGH_DTB[$i]}` ))
+    fi
+    i=$(( $i + 1 ))
 done
 
 # add 16 MB slack
@@ -45,7 +45,7 @@ echo PART1 size: "$_part1_size"MB
 
 if test "$DOM0_RAMDISK"
 then
-	_part2_size=`stat --printf="%s" $UBOOT_OUT/$DOM0_RAMDISK`
+    _part2_size=`stat --printf="%s" $UBOOT_OUT/$DOM0_RAMDISK`
 fi
 _part2_size=$(( $_part2_size + $offset - 1))
 _part2_size=$(( $_part2_size & ~($offset - 1) ))
@@ -88,7 +88,7 @@ dmsetup create diskimage --table "0 $_disksize linear $_loop_dev 0"
 # ensure that /dev/mapper/diskimage exists
 while [ ! -b /dev/mapper/diskimage ]
 do
-	sleep 2
+    sleep 2
 done
 
 kpartx -a /dev/mapper/diskimage
@@ -96,7 +96,7 @@ kpartx -a /dev/mapper/diskimage
 # ensure that /dev/mapper/{diskimage1,diskimage2} exists
 while [ ! -b /dev/mapper/diskimage1 ] || [ ! -b /dev/mapper/diskimage2 ]
 do
-	sleep 2
+    sleep 2
 done
 
 # format vos_a partition
@@ -133,16 +133,16 @@ cp --parents "$UBOOT_SCRIPT" "${DESTDIR}/part/disk1/"
 i=0
 while test $i -lt $NUM_DOMUS
 do
-	cp --parents "${DOMU_KERNEL[$i]}" "${DESTDIR}/part/disk1/"
-	if test "${DOMU_RAMDISK[$i]}"
-	then
-		cp --parents "${DOMU_RAMDISK[$i]}" "${DESTDIR}/part/disk1/"
-	fi
-	if test "${DOMU_PASSTHROUGH_DTB[$i]}"
-	then
-		cp --parents "${DOMU_PASSTHROUGH_DTB[$i]}" "${DESTDIR}/part/disk1/"
-	fi
-	i=$(( $i + 1 ))
+    cp --parents "${DOMU_KERNEL[$i]}" "${DESTDIR}/part/disk1/"
+    if test "${DOMU_RAMDISK[$i]}"
+    then
+        cp --parents "${DOMU_RAMDISK[$i]}" "${DESTDIR}/part/disk1/"
+    fi
+    if test "${DOMU_PASSTHROUGH_DTB[$i]}"
+    then
+        cp --parents "${DOMU_PASSTHROUGH_DTB[$i]}" "${DESTDIR}/part/disk1/"
+    fi
+    i=$(( $i + 1 ))
 done
 cd -
 
