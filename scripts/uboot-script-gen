@@ -3,6 +3,15 @@
 offset=$((2*1024*1024))
 filesize=0
 prog_req=(mkimage file)
+tmp_files=()
+
+function remove_tmp_files()
+{
+    for i in "${tmp_files[@]}"
+    do
+        rm -f "$i"
+    done
+}
 
 function add_device_tree_kernel()
 {
@@ -125,6 +134,7 @@ function check_compressed_file_type()
     if test $? == 0
     then
         local tmp=`mktemp`
+        tmp_files+=($tmp)
         cat $filename | gunzip > $tmp
         filename=$tmp
     fi
@@ -274,6 +284,8 @@ device_tree_editing $device_tree_addr
 echo "setenv fdt_high 0xffffffffffffffff" >> $UBOOT_SOURCE
 echo "booti $xen_addr - $device_tree_addr" >> $UBOOT_SOURCE
 mkimage -A arm64 -T script -C none -a $uboot_addr -e $uboot_addr -d $UBOOT_SOURCE "$UBOOT_SCRIPT" &> /dev/null
+
+remove_tmp_files
 
 memaddr=$(( $MEMORY_END - $memaddr - $offset ))
 if test $memaddr -lt 0
