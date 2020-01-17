@@ -118,6 +118,13 @@ function check_file_type()
     local filename=$1
     local type="$2"
 
+    # if file doesn't know what it is, it outputs data, so include that
+    # since some executables aren't recongnized
+    if [ "$type" = "executable" ]
+    then
+        type="executable\|data"
+    fi
+
     file $filename | grep "$type" &> /dev/null
     if test $? != 0
     then
@@ -232,11 +239,11 @@ uboot_addr=$memaddr
 memaddr=$(( $memaddr + $offset ))
 memaddr=`printf "0x%X\n" $memaddr`
 
-check_compressed_file_type $XEN "MS-DOS executable"
+check_compressed_file_type $XEN "executable"
 xen_addr=$memaddr
 load_file "$XEN"
 
-check_compressed_file_type $DOM0_KERNEL "MS-DOS executable"
+check_compressed_file_type $DOM0_KERNEL "executable"
 dom0_kernel_addr=$memaddr
 load_file $DOM0_KERNEL
 dom0_kernel_size=$filesize
@@ -254,7 +261,7 @@ fi
 i=0
 while test $i -lt $NUM_DOMUS
 do
-    check_compressed_file_type ${DOMU_KERNEL[$i]} "MS-DOS executable"
+    check_compressed_file_type ${DOMU_KERNEL[$i]} "executable"
     domU_kernel_addr[$i]=$memaddr
     load_file ${DOMU_KERNEL[$i]}
     domU_kernel_size[$i]=$filesize
