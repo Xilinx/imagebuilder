@@ -13,6 +13,13 @@ function remove_tmp_files()
     done
 }
 
+function cleanup_and_return_err()
+{
+    rm -f $UBOOT_SOURCE $UBOOT_SCRIPT
+    remove_tmp_files
+    exit 1
+}
+
 function add_device_tree_kernel()
 {
     local path=$1
@@ -118,6 +125,12 @@ function check_file_type()
     local filename=$1
     local type="$2"
 
+    if [ ! -f $filename ]
+    then
+        echo "File $filename doesn't exist, exiting";
+        cleanup_and_return_err
+    fi
+
     # if file doesn't know what it is, it outputs data, so include that
     # since some executables aren't recongnized
     if [ "$type" = "executable" ]
@@ -128,7 +141,8 @@ function check_file_type()
     file $filename | grep "$type" &> /dev/null
     if test $? != 0
     then
-        echo Wrong file type "$filename". It should be "$type".
+        echo Wrong file type "$filename". It should be "$type", exiting.
+        clean_up_and_err_out
     fi
 }
 
@@ -136,6 +150,12 @@ function check_compressed_file_type()
 {
     local filename=$1
     local type="$2"
+
+    if [ ! -f $filename ]
+    then
+        echo "File $filename doesn't exist, exiting";
+        cleanup_and_return_err
+    fi
 
     file $filename | grep "gzip compressed data" &> /dev/null
     if test $? == 0
@@ -298,7 +318,7 @@ memaddr=$(( $MEMORY_END - $memaddr - $offset ))
 if test $memaddr -lt 0
 then
     echo Error, not enough memory to load all binaries
-    exit 1
+    cleanup_and_return_err
 fi
 
 echo "Generated uboot script $UBOOT_SCRIPT, to be loaded at address $uboot_addr:"
