@@ -68,10 +68,14 @@ Where:
 - DOMU_PASSTHROUGH_DTB[number] specifies the device assignment
   configuration, see xen.git:docs/misc/arm/passthrough.txt
 
+- UBOOT_SOURCE and UBOOT_SCRIPT specify the output. They are optional
+  as you can pass -o FILENAME to uboot-script-gen as a command line
+  parameter
+
 Then you can invoke uboot-script-gen as follows:
 
 ```
-$ bash ./scripts/uboot-script-gen -c /path/to/config-file -d . -t tftp
+$ bash ./scripts/uboot-script-gen -c /path/to/config-file -d . -t tftp -o bootscript
 ```
 
 Where:\
@@ -81,6 +85,7 @@ Where:\
 -t specifies the u-boot command to load the binaries. "tftp" and "sd"
    are shorthands for "tftpb" and "load scsi 0:1", but actually any
    arbitrary command can be used, for instance -t "fatload" is valid.\
+-o specifies the output filename for the uboot script and its source.\
 
 
 ## Stand-alone Usage: scripts/disk\_image

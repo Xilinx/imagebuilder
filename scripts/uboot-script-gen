@@ -183,7 +183,7 @@ function check_depends()
 function print_help
 {
     echo "usage:"
-    echo "	$0 -c CONFIG_FILE -t UBOOT_TYPE -d DIRECTORY"
+    echo "	$0 -c CONFIG_FILE -t UBOOT_TYPE -d DIRECTORY [-o FILE]"
     echo "	$0 -h"
     echo "where:"
     echo "	CONFIG_FILE - configuration file"
@@ -192,6 +192,7 @@ function print_help
     echo "		tftp - alias for \"tftpb\" for uboot load cammnds"
     echo "		< > - used for uboot load commands"
     echo "	DIRECTORY - root directory of where the files of CONFIG_FILE"
+    echo "	FILE - output filename for the uboot script and its source, overrides option in CONFIG_FILE"
     echo "	-h - prints out the help message and exits "
     echo "Defaults:"
     echo "	CONFIG_FILE=$cfg_file, UBOOT_TYPE=\"LOAD_CMD\" env var, DIRECTORY=$uboot_dir"
@@ -199,7 +200,7 @@ function print_help
     echo "	$0 -c ../config -d ./build42 -t \"scsi load 1:1\""
 }
 
-while getopts ":c:t:d:h" opt; do
+while getopts ":c:t:d:ho:" opt; do
     case ${opt} in
     t )
         case $OPTARG in
@@ -219,6 +220,9 @@ while getopts ":c:t:d:h" opt; do
         ;;
     d )
         uboot_dir=$OPTARG
+        ;;
+    o )
+        UBOOT_SCRIPT_ARG=$OPTARG
         ;;
     h )
         print_help
@@ -241,6 +245,13 @@ fi
 check_depends
 
 source "$cfg_file"
+
+# CLI ARG overrides what's in the config file
+if [ ! -z "$UBOOT_SCRIPT_ARG" ]
+then
+    UBOOT_SCRIPT="$UBOOT_SCRIPT_ARG".scr
+    UBOOT_SOURCE="$UBOOT_SCRIPT_ARG".source
+fi
 
 # the cd is needed so that the relative paths will match once we use
 # tftp or move the files to a partition
