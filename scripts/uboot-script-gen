@@ -62,7 +62,7 @@ function device_tree_editing()
     echo "fdt resize 1024" >> $UBOOT_SOURCE
     echo "fdt set /chosen \#address-cells <0x2>" >> $UBOOT_SOURCE
     echo "fdt set /chosen \#size-cells <0x2>" >> $UBOOT_SOURCE
-    echo "fdt set /chosen xen,xen-bootargs \"console=dtuart dtuart=serial0 dom0_mem=700M dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null\"" >> $UBOOT_SOURCE
+    echo "fdt set /chosen xen,xen-bootargs \"console=dtuart dtuart=serial0 dom0_mem=1G dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null\"" >> $UBOOT_SOURCE
     echo "fdt mknod /chosen dom0" >> $UBOOT_SOURCE
     echo "fdt set /chosen/dom0 compatible \"xen,linux-zimage\" \"xen,multiboot-module\"" >> $UBOOT_SOURCE
     echo "fdt set /chosen/dom0 reg <0x0 "$dom0_kernel_addr" 0x0 "$dom0_kernel_size">" >> $UBOOT_SOURCE
