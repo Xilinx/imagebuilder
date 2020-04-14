@@ -88,22 +88,22 @@ check_depends
 source "$CFG_FILE"
 
 offset=$((2*1024*1024))
-_part1_size=`stat --printf="%s" $UBOOT_OUT/$XEN`
-_part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/$DOM0_KERNEL` ))
-_part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/$DEVICE_TREE` ))
-_part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/$UBOOT_SOURCE` ))
-_part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/$UBOOT_SCRIPT` ))
+_part1_size=`stat -L --printf="%s" $UBOOT_OUT/$XEN`
+_part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$DOM0_KERNEL` ))
+_part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$DEVICE_TREE` ))
+_part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$UBOOT_SOURCE` ))
+_part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$UBOOT_SCRIPT` ))
 i=0
 while test $i -lt $NUM_DOMUS
 do
-    _part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/${DOMU_KERNEL[$i]}` ))
+    _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/${DOMU_KERNEL[$i]}` ))
     if test "${DOMU_RAMDISK[$i]}"
     then
-        _part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/${DOMU_RAMDISK[$i]}` ))
+        _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/${DOMU_RAMDISK[$i]}` ))
     fi
     if test "${DOMU_PASSTHROUGH_DTB[$i]}"
     then
-        _part1_size=$(( $_part1_size + `stat --printf="%s" $UBOOT_OUT/${DOMU_PASSTHROUGH_DTB[$i]}` ))
+        _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/${DOMU_PASSTHROUGH_DTB[$i]}` ))
     fi
     i=$(( $i + 1 ))
 done
@@ -117,7 +117,7 @@ echo PART1 size: "$_part1_size"MB
 
 if test "$DOM0_RAMDISK"
 then
-    _part2_size=`stat --printf="%s" $UBOOT_OUT/$DOM0_RAMDISK`
+    _part2_size=`stat -L --printf="%s" $UBOOT_OUT/$DOM0_RAMDISK`
 fi
 _part2_size=$(( $_part2_size + $offset - 1))
 _part2_size=$(( $_part2_size & ~($offset - 1) ))
