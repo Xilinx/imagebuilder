@@ -68,7 +68,7 @@ function device_tree_editing()
     echo "fdt set /chosen/dom0 reg <0x0 "$dom0_kernel_addr" 0x0 "$dom0_kernel_size">" >> $UBOOT_SOURCE
     if test "$LOAD_CMD" = "tftpb"
     then
-        echo "fdt set /chosen xen,dom0-bootargs \"console=hvc0 earlycon=xen earlyprintk=xen root=/dev/ram0\"" >> $UBOOT_SOURCE
+        echo "fdt set /chosen xen,dom0-bootargs \"console=hvc0 earlycon=xen earlyprintk=xen clk_ignore_unused root=/dev/ram0\"" >> $UBOOT_SOURCE
         if test $dom0_ramdisk_addr != "-"
         then
             echo "fdt mknod /chosen dom0-ramdisk" >> $UBOOT_SOURCE
