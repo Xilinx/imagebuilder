@@ -136,6 +136,11 @@ function check_file_type()
     if [ "$type" = "executable" ]
     then
         type="executable\|data"
+    # file in older distros (ex: RHEL 7.4) just output data for device
+    # tree blobs
+    elif [ "$type" = "Device Tree Blob" ]
+    then
+        type="Device Tree Blob\|data"
     fi
 
     file -L $filename | grep "$type" &> /dev/null
