@@ -80,8 +80,9 @@ $ bash ./scripts/uboot-script-gen -c /path/to/config-file -d . -t tftp -o bootsc
 
 Where:\
 -c specifies the path to the config file to use\
--d specifies the working directory (path in the config file are relative
-   to it)\
+-d specifies the "root" directory (paths in the config file are relative
+   to it), this is not a working directory (any output file locations
+   are specified in the config and any temporary files are in /tmp)\
 -t specifies the u-boot command to load the binaries. "tftp" and "sd"
    are shorthands for "tftpb" and "load scsi 0:1", but actually any
    arbitrary command can be used, for instance -t "fatload" is valid.\
