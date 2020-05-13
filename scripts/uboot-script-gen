@@ -116,7 +116,9 @@ function load_file()
 {
     local filename=$1
 
-    echo "$LOAD_CMD $memaddr $filename" >> $UBOOT_SOURCE
+    local relative_path="$(realpath --relative-to=$PWD $filename)"
+
+    echo "$LOAD_CMD $memaddr $relative_path" >> $UBOOT_SOURCE
     add_size $filename
 }
 
