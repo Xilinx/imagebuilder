@@ -189,9 +189,10 @@ function check_depends()
 
 function print_help
 {
+    script=`basename "$0"`
     echo "usage:"
-    echo "	$0 -c CONFIG_FILE -t UBOOT_TYPE -d DIRECTORY [-o FILE]"
-    echo "	$0 -h"
+    echo "	$script -c CONFIG_FILE -t UBOOT_TYPE -d DIRECTORY [-o FILE]"
+    echo "	$script -h"
     echo "where:"
     echo "	CONFIG_FILE - configuration file"
     echo "	UBOOT_TYPE can be:"
@@ -204,7 +205,7 @@ function print_help
     echo "Defaults:"
     echo "	CONFIG_FILE=$cfg_file, UBOOT_TYPE=\"LOAD_CMD\" env var, DIRECTORY=$uboot_dir"
     echo "Example:"
-    echo "	$0 -c ../config -d ./build42 -t \"scsi load 1:1\""
+    echo "	$script -c ../config -d ./build42 -t \"scsi load 1:1\""
 }
 
 while getopts ":c:t:d:ho:" opt; do
