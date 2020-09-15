@@ -11,15 +11,14 @@ the binaries automatically and boot the full system fast. Given a
 collection of binaries such as Xen, Dom0 and a number of Dom0-less
 DomUs, ImageBuilder takes care of calculating all loading addresses,
 editing device tree with the necessary information, and even
-pre-configuring a disk image with kernels and rootfses. ImageBuilder
-scripts can be used stand-alone, or from an ImageBuilder Container.
+pre-configuring a disk image with kernels and rootfses.
 
 ImageBuilder has been tested on Xilinx ZynqMP MPSoC boards. An
 up-to-date wikipage is also available at
 [wiki.xenproject.org](https://wiki.xenproject.org/index.php?title=ImageBuilder).
 
 
-## Stand-alone Usage: scripts/uboot-script-gen
+## scripts/uboot-script-gen
 
 The ImageBuilder script that generates a u-boot script to load all your
 binaries for a Xen Dom0-less setup is `scripts/uboot-script-gen`.
@@ -89,7 +88,7 @@ Where:\
 -o specifies the output filename for the uboot script and its source.\
 
 
-## Stand-alone Usage: scripts/disk\_image
+## scripts/disk\_image
 
 The ImageBuilder script that generates a disk image file to load on a
 SD or SATA drive.  This creates 2 partitions: boot partition where the
@@ -112,76 +111,3 @@ Where:\
 -w specifies the temporary working directory that the script uses for
    building the disk image, and if not set, one is created in /tmp\
 -o specifies the output disk image file name\
-
-
-## Container Usage
-
-ImageBuilder comes with a Dockerfile to build a container with all the
-required scripts. The following chapters explain how to build it and use
-it.
-
-
-### `Dockerfile.image`
-
-Build the container.
-
-```
-$ cd imagebuilder
-
-$ docker build --force-rm --file Dockerfile.image -t imagebuilder .
-```
-
-### `/imagebuilder_sd` or `/imagebuilder_tftp`
-
-#### TFTP
-
-Run the following command to generate a uboot script to tftp all the
-necessary binaries automatically:
-
-```
-$ docker run --rm --privileged=true -ti -v /tmp:/tmp -v /dev:/dev imagebuilder /imagebuilder_tftp
-```
-
-The generated files are in `/tmp/output`. At the u-boot prompt run:
-
-```
-tftpb 0xc00000 boot.scr; source 0xc00000
-```
-
-If you are using QEMU, you also need to manually setup the ip address.
-Run this command instead:
-
-```
-setenv serverip 192.168.76.2; tftpb 0xc00000 boot.scr; source 0xc00000
-```
-
-#### SATA
-
-Run the following command to generate an image to be written on disk:
-
-```
-$ docker run --rm --privileged=true -ti -v /tmp:/tmp -v /dev:/dev imagebuilder /imagebuilder_sd
-```
-
-The generated image is `/tmp/img/zynqmp.img`. Proceed to dd it to a
-disk, or pass the file as an argument to QEMU (describing how to use
-QEMU to emulate a SATA disk is out of scope for this document).
-
-At the u-boot prompt you can boot automatically with the following
-command:
-
-```
-scsi scan; load scsi 0:1 0xc00000 boot.scr; source 0xc00000
-```
-
-### Add additional DomUs
-
-Assuming that you have the kernel and ramdisk of another DomU already in
-`PACKAGE.md` format, you can configure Imagebuilder to start it
-automatically at boot by making the following changes:
-
-- edit `Dockerfile.image`, add the domU package to the FROM lines
-- edit `Dockerfile.image`, add the domU package to the COPY lines
-- edit `config`, adding another DomU (NUM_DOMUS, DOMU_KERNEL and DOMU_RAMDISK)
-
-Rebuild Imagebuilder and rerun imagebuilder_sd/tftp.

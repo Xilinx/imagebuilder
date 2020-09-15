@@ -1,9 +1,0 @@
-#!/bin/bash
-
-rm -rf /tmp/output
-mkdir /tmp/output
-cp config /tmp/output
-cp -r /home/builder/output/* /tmp/output
-cd /tmp/output
-bash /uboot-script-gen -c ./config -d ./ -t sd
-bash /disk_image -c ./config -d ./  -o /tmp/disk.img
