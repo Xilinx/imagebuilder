@@ -31,7 +31,9 @@ MEMORY_END="0x80000000"
 
 DEVICE_TREE="mpsoc.dtb"
 XEN="xen"
+XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=1G dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null"
 DOM0_KERNEL="Image-dom0"
+DOM0_CMD="console=hvc0 earlycon=xen earlyprintk=xen clk_ignore_unused"
 DOM0_RAMDISK="dom0-ramdisk.cpio"
 
 NUM_DOMUS=2
@@ -53,7 +55,14 @@ Where:
 - XEN specifies the Xen hypervisor binary to load. Note that it has to
   be a regular Xen binary, not a u-boot binary.
 
+- XEN_CMD specifies the command line arguments used for Xen.  If not
+  set, the default one will be used.
+
 - DOM0_KERNEL specifies the Dom0 kernel file to load.
+
+- DOM0_CMD specifies the command line arguments for Dom0's Linux
+  kernel.  If "root=" isn't set, imagebuilder will try to determine it.
+  If not set at all, the default one is used.
 
 - DOM0_RAMDISK specifies the Dom0 ramdisk to use. Note that it should be
   a regular ramdisk cpio.gz file, not a u-boot binary.

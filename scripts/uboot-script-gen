@@ -62,13 +62,13 @@ function device_tree_editing()
     echo "fdt resize 1024" >> $UBOOT_SOURCE
     echo "fdt set /chosen \#address-cells <0x2>" >> $UBOOT_SOURCE
     echo "fdt set /chosen \#size-cells <0x2>" >> $UBOOT_SOURCE
-    echo "fdt set /chosen xen,xen-bootargs \"console=dtuart dtuart=serial0 dom0_mem=1G dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null\"" >> $UBOOT_SOURCE
+    echo "fdt set /chosen xen,xen-bootargs \"$XEN_CMD\"" >> $UBOOT_SOURCE
     echo "fdt mknod /chosen dom0" >> $UBOOT_SOURCE
     echo "fdt set /chosen/dom0 compatible \"xen,linux-zimage\" \"xen,multiboot-module\"" >> $UBOOT_SOURCE
     echo "fdt set /chosen/dom0 reg <0x0 "$dom0_kernel_addr" 0x0 "$dom0_kernel_size">" >> $UBOOT_SOURCE
     if test "$LOAD_CMD" = "tftpb"
     then
-        echo "fdt set /chosen xen,dom0-bootargs \"console=hvc0 earlycon=xen earlyprintk=xen clk_ignore_unused root=/dev/ram0\"" >> $UBOOT_SOURCE
+        echo "fdt set /chosen xen,dom0-bootargs \"$DOM0_CMD\"" >> $UBOOT_SOURCE
         if test $dom0_ramdisk_addr != "-"
         then
             echo "fdt mknod /chosen dom0-ramdisk" >> $UBOOT_SOURCE
@@ -76,7 +76,7 @@ function device_tree_editing()
             echo "fdt set /chosen/dom0-ramdisk reg <0x0 "$dom0_ramdisk_addr" 0x0 "$dom0_ramdisk_size">" >> $UBOOT_SOURCE
         fi
     else
-        echo "fdt set /chosen xen,dom0-bootargs \"console=hvc0 earlycon=xen earlyprintk=xen root=/dev/sda2\"" >> $UBOOT_SOURCE
+        echo "fdt set /chosen xen,dom0-bootargs \"$DOM0_CMD\"" >> $UBOOT_SOURCE
     fi
 
     i=0
@@ -259,6 +259,25 @@ if [ ! -z "$UBOOT_SCRIPT_ARG" ]
 then
     UBOOT_SCRIPT="$UBOOT_SCRIPT_ARG".scr
     UBOOT_SOURCE="$UBOOT_SCRIPT_ARG".source
+fi
+
+if [ -z "$XEN_CMD" ]
+then
+    XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=1G dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null"
+fi
+
+if [ -z "$DOM0_CMD" ]
+then
+    DOM0_CMD="console=hvc0 earlycon=xen earlyprintk=xen clk_ignore_unused"
+fi
+if [[ ! $DOM0_CMD =~ root= ]]
+then
+    if test "$LOAD_CMD" = "tftpb"
+    then
+        DOM0_CMD="$DOM0_CMD root=/dev/ram0"
+    else
+        DOM0_CMD="$DOM0_CMD root=/dev/sda2"
+    fi
 fi
 
 # the cd is needed so that the relative paths will match once we use
