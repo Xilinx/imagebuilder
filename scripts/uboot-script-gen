@@ -86,8 +86,8 @@ function device_tree_editing()
         echo "fdt set /chosen/domU$i compatible \"xen,domain\"" >> $UBOOT_SOURCE
         echo "fdt set /chosen/domU$i \#address-cells <0x2>" >> $UBOOT_SOURCE
         echo "fdt set /chosen/domU$i \#size-cells <0x2>" >> $UBOOT_SOURCE
-        echo "fdt set /chosen/domU$i memory <0x0 0x40000>" >> $UBOOT_SOURCE
-        echo "fdt set /chosen/domU$i cpus <0x1>" >> $UBOOT_SOURCE
+        echo "fdt set /chosen/domU$i memory <0x0 "${DOMU_MEM[$i]}">" >> $UBOOT_SOURCE
+        echo "fdt set /chosen/domU$i cpus <"${DOMU_VCPUS[$i]}">" >> $UBOOT_SOURCE
         echo "fdt set /chosen/domU$i vpl011 <0x1>" >> $UBOOT_SOURCE
         add_device_tree_kernel "/chosen/domU$i" ${domU_kernel_addr[$i]} ${domU_kernel_size[$i]}
         if test "${domU_ramdisk_addr[$i]}"
@@ -279,6 +279,20 @@ then
         DOM0_CMD="$DOM0_CMD root=/dev/sda2"
     fi
 fi
+i=0
+while test $i -lt $NUM_DOMUS
+do
+    if test -z "${DOMU_MEM[$i]}"
+    then
+        DOMU_MEM[$i]=512
+    fi
+    DOMU_MEM[$i]=$((${DOMU_MEM[$i]} * 1024))
+    if test -z "${DOMU_VCPUS[$i]}"
+    then
+        DOMU_VCPUS[$i]=1
+    fi
+    i=$(( $i + 1 ))
+done
 
 # the cd is needed so that the relative paths will match once we use
 # tftp or move the files to a partition

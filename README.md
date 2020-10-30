@@ -42,6 +42,8 @@ DOMU_RAMDISK[0]="zynqmp-dom1/domU-ramdisk.cpio"
 DOMU_PASSTHROUGH_DTB[0]="zynqmp-dom1/passthrough-example-part.dtb"
 DOMU_KERNEL[1]="zynqmp-dom2/Image-domU"
 DOMU_RAMDISK[1]="zynqmp-dom2/domU-ramdisk.cpio"
+DOMU_MEM[1]=512
+DOMU_VCPUS[1]=1
 
 UBOOT_SOURCE="boot.source"
 UBOOT_SCRIPT="boot.scr"
@@ -75,6 +77,10 @@ Where:
 
 - DOMU_PASSTHROUGH_DTB[number] specifies the device assignment
   configuration, see xen.git:docs/misc/arm/passthrough.txt
+
+- DOMU_MEM[number] is the amount of memory for the VM in MB, default 512MB
+
+- DOMU_VCPUS[number] is the number of vcpus for the VM, default 1
 
 - UBOOT_SOURCE and UBOOT_SCRIPT specify the output. They are optional
   as you can pass -o FILENAME to uboot-script-gen as a command line
