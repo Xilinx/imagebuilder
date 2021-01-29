@@ -196,7 +196,8 @@ function print_help
     echo "where:"
     echo "	CONFIG_FILE - configuration file"
     echo "	UBOOT_TYPE can be:"
-    echo "		sd - alias for \"scsi load 0:1\" for uboot load commands"
+    echo "		sd - alias for \"mmc load 0:1\" for uboot load commands"
+    echo "		scsi - alias for \"scsi load 0:1\" for uboot load commands"
     echo "		tftp - alias for \"tftpb\" for uboot load cammnds"
     echo "		< > - used for uboot load commands"
     echo "	DIRECTORY - root directory where the files of CONFIG_FILE are located"
@@ -212,8 +213,11 @@ while getopts ":c:t:d:ho:" opt; do
     case ${opt} in
     t )
         case $OPTARG in
-        sd )
+        scsi )
             LOAD_CMD="load scsi 0:1"
+            ;;
+        sd )
+            LOAD_CMD="load mmc 0:1"
             ;;
         tftp )
             LOAD_CMD="tftpb"
@@ -276,7 +280,35 @@ then
     then
         DOM0_CMD="$DOM0_CMD root=/dev/ram0"
     else
-        DOM0_CMD="$DOM0_CMD root=/dev/sda2"
+        DEV=${LOAD_CMD%:*}
+        DEV=${DEV##* }
+        PAR=${LOAD_CMD#*:}
+
+        if [ -z "$DEV" ] || [ -z "$PAR" ]
+        then
+            echo "Could not parse device and partition."
+            echo "Please make sure the load command is correct or manually set DOM0_CMD in the config file."
+            exit 1
+        fi
+
+        PAR=$((PAR + 1))
+
+        if [[ $LOAD_CMD =~ mmc ]]
+        then
+            DOM0_CMD="$DOM0_CMD root=/dev/mmcblk${DEV}p${PAR}"
+        elif [[ $LOAD_CMD =~ scsi ]]
+        then
+            # converts number to a scsi device character
+            DEV=$((DEV + 97))
+            DEV=$(printf %x $DEV)
+            DEV=$(printf "\x$DEV")
+
+            DOM0_CMD="$DOM0_CMD root=/dev/sd${DEV}${PAR}"
+        else
+            echo "Only mmc and scsi are supported for automatically setting the root partition."
+            echo "Manually set DOM0_CMD with the root device in the config file to bypass this."
+            exit 1
+        fi
     fi
 fi
 i=0

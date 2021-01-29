@@ -97,9 +97,10 @@ Where:\
 -d specifies the "root" directory (paths in the config file are relative
    to it), this is not a working directory (any output file locations
    are specified in the config and any temporary files are in /tmp)\
--t specifies the u-boot command to load the binaries. "tftp" and "sd"
-   are shorthands for "tftpb" and "load scsi 0:1", but actually any
-   arbitrary command can be used, for instance -t "fatload" is valid.\
+-t specifies the u-boot command to load the binaries. "tftp", "sd" and
+   "scsi" are shorthands for "tftpb", "load mmc 0:1" and
+   "load scsi 0:1", but actually any arbitrary command can be used, for
+   instance -t "fatload" is valid.\
 -o specifies the output filename for the uboot script and its source.\
 
 
