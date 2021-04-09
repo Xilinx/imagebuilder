@@ -106,10 +106,20 @@ Where:\
 
 ## scripts/disk\_image
 
-The ImageBuilder script that generates a disk image file to load on a
-SD or SATA drive.  This creates 2 partitions: boot partition where the
-boot files from working directory (-c option) are, and the dom0 ramdisk
-uncompressed into the root FS partition.
+The ImageBuilder script that generates a disk image file to load on a SD
+or SATA drive.  This creates multiple partitions: 1 boot partition where
+the boot files from working directory (-c option) are, and 1 additional
+partition for each Dom0/DomU cpio archive to write to disk.
+
+disk\_image will write to disk as separate partition each file specified
+as follows:
+
+- DOM0_ROOTFS specifies the Dom0 rootfs to use. Note that the file to
+  write should be a regular cpio.gz file, not a u-boot binary.
+
+- DOMU_ROOTFS[number] specifies the DomU rootfs to use. Note that it
+  should be a regular cpio.gz file, not a u-boot binary.
+
 
 After you've generated the u-boot scripts using the uboot-script-gen
 script, disk_image is run as follows:

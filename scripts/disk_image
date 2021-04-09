@@ -17,6 +17,46 @@ function check_depends()
     done
 }
 
+function add_partition()
+{
+    local rootfs="$1"
+    _part_size=`stat -L --printf="%s" $rootfs`
+    _part_size=$(( $_part_size + $offset - 1))
+    _part_size=$(( $_part_size & ~($offset - 1) ))
+    # account for gzip compression
+    _part_size=$(( $_part_size * 2 ))
+    # add some slack
+    _part_size=$(( 128*1024*1024 + $_part_size ))
+    _part_size=$(( $_part_size / 1024 / 1024 ))
+    echo PART size: "$_part_size"MB
+    
+    prev=$(( $_npart - 1 ))
+    _sector_start[$_npart]=$(( ${_sector_end[$prev]} + 1 ))
+    _sector_end[$_npart]=$(( $_part_size * 1024 * 1024 / $_sector_size + ${_sector_start[$_npart]} - 1))
+
+    _tot_size=$(( $_tot_size + $_part_size ))
+    _npart=$(( $_npart + 1 ))
+}
+
+function write_cpio()
+{
+    local j=$1
+    local rootfs=$2
+
+    # create mount point and mount diskn
+    mkdir -p ${DESTDIR}/part/disk$j
+    mount -t ext4 /dev/mapper/diskimage$j $DESTDIR/part/disk$j
+    
+    # Extract rootfs cpio archive into `.../part/vos_$j`
+    cd ${DESTDIR}/part/disk$j
+    cat "${UBOOT_OUT_ABS}/$rootfs" | gunzip | cpio -id
+    cd -
+    
+    # umount
+    sync
+    umount $DESTDIR/part/disk$j
+}
+
 function print_help
 {
     echo "usage:"
@@ -115,27 +155,28 @@ _part1_size=$(( $_part1_size & ~($offset - 1) ))
 _part1_size=$(( $_part1_size / 1024 / 1024 ))
 echo PART1 size: "$_part1_size"MB
 
-if test "$DOM0_RAMDISK"
-then
-    _part2_size=`stat -L --printf="%s" $UBOOT_OUT/$DOM0_RAMDISK`
-fi
-_part2_size=$(( $_part2_size + $offset - 1))
-_part2_size=$(( $_part2_size & ~($offset - 1) ))
-# account for gzip compression
-_part2_size=$(( $_part2_size * 2 ))
-# add some slack
-_part2_size=$(( 128*1024*1024 + $_part2_size ))
-_part2_size=$(( $_part2_size / 1024 / 1024 ))
-echo PART2 size: "$_part2_size"MB
-
-
 _sector_size=512
-# _sector_first_start needs to be aligned to 2048
-_sector_first_start=2048
-_sector_first_end=$(( $_part1_size * 1024 * 1024 / $_sector_size + $_sector_first_start - 1))
-_sector_second_start=$(( $_sector_first_end + 1 ))
-_sector_second_end=$(( $_part2_size * 1024 * 1024 / $_sector_size + $_sector_second_start - 1))
-_tot_size=$(( $_part1_size + $_part2_size + 16 ))
+# _sector_start[0] needs to be aligned to 2048
+_sector_start[0]=2048
+_sector_end[0]=$(( $_part1_size * 1024 * 1024 / $_sector_size + ${_sector_start[0]} - 1))
+_tot_size=$(( $_part1_size ))
+_npart=1
+
+if test "$DOM0_ROOTFS"
+then
+    add_partition "$UBOOT_OUT/$DOM0_ROOTFS"
+fi
+
+i=0
+while test $i -lt $NUM_DOMUS
+do
+    if test "${DOMU_ROOTFS[$i]}"
+    then
+        add_partition "$UBOOT_OUT/${DOMU_ROOTFS[$i]}"
+    fi
+    i=$(( $i + 1 ))
+done
+_tot_size=$(( $_tot_size + 16 ))
 
 # NOTE: Increase vos_a to 256 to accomodate rootfs
 # 528 MiB (256 + 256 + 16)
@@ -144,8 +185,14 @@ truncate $IMG -s "$_tot_size"M
 # create GPT partition table
 sgdisk -og $IMG
 
-sgdisk -n 1:$_sector_first_start:$_sector_first_end -c 1:"Linux1" -t 1:8300 $IMG
-sgdisk -n 2:$_sector_second_start:$_sector_second_end -c 2:"Linux2" -t 2:8300 $IMG
+i=0
+j=1
+while test $i -lt $_npart
+do
+    sgdisk -n $j:${_sector_start[$i]}:${_sector_end[$i]} -c $j:"Linux""$j" -t $j:8300 $IMG
+    i=$(( $i + 1 ))
+    j=$(( $j + 1 ))
+done
 
 # find the first available loop device
 _loop_dev=$(losetup -f)
@@ -165,31 +212,20 @@ done
 
 kpartx -a /dev/mapper/diskimage
 
-# ensure that /dev/mapper/{diskimage1,diskimage2} exists
-while [ ! -b /dev/mapper/diskimage1 ] || [ ! -b /dev/mapper/diskimage2 ]
+# ensure that /dev/mapperdiskimage1 exists
+while [ ! -b /dev/mapper/diskimage1 ]
 do
     sleep 2
 done
 
-# format vos_a partition
-mkfs.ext4 -L vos_a -F /dev/mapper/diskimage1
-
-# format vos_b partition
-mkfs.ext4 -L vos_b -F /dev/mapper/diskimage2
-
-
-# create mount point and mount disk2
-mkdir -p ${DESTDIR}/part/disk2
-mount -t ext4 /dev/mapper/diskimage2 $DESTDIR/part/disk2
-
-# Extract rootfs cpio archive into `.../part/vos_a`
-cd ${DESTDIR}/part/disk2
-cat "${UBOOT_OUT_ABS}/${DOM0_RAMDISK}" | gunzip | cpio -id
-cd -
-
-# umount
-sync
-umount $DESTDIR/part/disk2
+i=0
+j=1
+while test $i -lt $_npart
+do
+    mkfs.ext4 -L vos_$j -F /dev/mapper/diskimage$j
+    i=$(( $i + 1 ))
+    j=$(( $j + 1 ))
+done
 
 # create mount point and mount disk1
 mkdir -p ${DESTDIR}/part/disk1
@@ -223,6 +259,25 @@ sync
 # This fails for some reason. It could work now because we are not using qemu-user
 # fstrim $DESTDIR/part/disk1
 umount $DESTDIR/part/disk1
+
+j=2
+if test "$DOM0_ROOTFS"
+then
+    write_cpio 2 "$DOM0_ROOTFS"
+    j=$(( $j + 1 ))
+fi
+
+i=0
+while test $i -lt $NUM_DOMUS
+do
+    if test "${DOMU_ROOTFS[$i]}"
+    then
+        write_cpio $j "${DOMU_ROOTFS[$i]}"
+        j=$(( $j + 1 ))
+    fi
+    i=$(( $i + 1 ))
+done
+
 
 kpartx -d /dev/mapper/diskimage
 dmsetup remove diskimage
