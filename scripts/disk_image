@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # This helps to see what is going on
-set -e -x
+set -e
 
 PROG_REQ=( kpartx mkfs.ext4 losetup sgdisk readlink )
 
