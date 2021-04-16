@@ -38,7 +38,7 @@ function add_partition()
     _npart=$(( $_npart + 1 ))
 }
 
-function write_cpio()
+function write_rootfs()
 {
     local j=$1
     local rootfs=$2
@@ -49,9 +49,18 @@ function write_cpio()
     
     # Extract rootfs cpio archive into `.../part/vos_$j`
     cd ${DESTDIR}/part/disk$j
-    cat "${UBOOT_OUT_ABS}/$rootfs" | gunzip | cpio -id
+
+    if [[ $rootfs = *.cpio.gz ]]
+    then
+        cat "${UBOOT_OUT_ABS}/$rootfs" | gunzip | cpio -id
+    elif [[ $rootfs = *.tar.gz ]]
+    then
+        tar xvzf "${UBOOT_OUT_ABS}/$rootfs"
+    else
+        echo "Ignoring $rootfs: unsupported file format. Use cpio.gz or tar.gz."
+    fi
+
     cd -
-    
     # umount
     sync
     umount $DESTDIR/part/disk$j
@@ -263,7 +272,7 @@ umount $DESTDIR/part/disk1
 j=2
 if test "$DOM0_ROOTFS"
 then
-    write_cpio 2 "$DOM0_ROOTFS"
+    write_rootfs 2 "$DOM0_ROOTFS"
     j=$(( $j + 1 ))
 fi
 
@@ -272,7 +281,7 @@ while test $i -lt $NUM_DOMUS
 do
     if test "${DOMU_ROOTFS[$i]}"
     then
-        write_cpio $j "${DOMU_ROOTFS[$i]}"
+        write_rootfs $j "${DOMU_ROOTFS[$i]}"
         j=$(( $j + 1 ))
     fi
     i=$(( $i + 1 ))

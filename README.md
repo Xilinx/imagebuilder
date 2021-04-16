@@ -114,12 +114,15 @@ partition for each Dom0/DomU cpio archive to write to disk.
 disk\_image will write to disk as separate partition each file specified
 as follows:
 
-- DOM0_ROOTFS specifies the Dom0 rootfs to use. Note that the file to
-  write should be a regular cpio.gz file, not a u-boot binary.
+- DOM0_ROOTFS specifies the Dom0 rootfs to use.
 
-- DOMU_ROOTFS[number] specifies the DomU rootfs to use. Note that it
-  should be a regular cpio.gz file, not a u-boot binary.
+- DOMU_ROOTFS[number] specifies the DomU rootfs to use.
 
+The provided rootfs should not be a u-boot binary. The supported
+formats are:
+
+- cpio.gz
+- tar.gz
 
 After you've generated the u-boot scripts using the uboot-script-gen
 script, disk_image is run as follows:
