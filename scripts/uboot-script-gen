@@ -82,6 +82,11 @@ function device_tree_editing()
     i=0
     while test $i -lt $NUM_DOMUS
     do
+        if test "${DOMU_ROOTFS[$i]}" || test "${DOMU_NOBOOT[$i]}"
+        then
+            i=$(( $i + 1 ))
+            continue
+        fi
         echo "fdt mknod /chosen domU$i" >> $UBOOT_SOURCE
         echo "fdt set /chosen/domU$i compatible \"xen,domain\"" >> $UBOOT_SOURCE
         echo "fdt set /chosen/domU$i \#address-cells <0x2>" >> $UBOOT_SOURCE
@@ -323,12 +328,6 @@ do
     then
         DOMU_VCPUS[$i]=1
     fi
-    if test "${DOMU_ROOTFS[$i]}"
-    then
-        echo "Cannot handle non-ramdisk rootfses for dom0less VMs."
-        echo "DomUs with rootfses on disk need to be created from dom0 using xl."
-        exit 1
-    fi
     i=$(( $i + 1 ))
 done
 
@@ -371,6 +370,15 @@ fi
 i=0
 while test $i -lt $NUM_DOMUS
 do
+    if test "${DOMU_ROOTFS[$i]}" || test "${DOMU_NOBOOT[$i]}"
+    then
+        if test -z "${DOMU_NOBOOT[$i]}"
+        then
+            echo "Skipping DomU[$i]: cannot handle non-ramdisk rootfs for dom0less VMs."
+        fi
+        i=$(( $i + 1 ))
+        continue
+    fi
     check_compressed_file_type ${DOMU_KERNEL[$i]} "executable"
     domU_kernel_addr[$i]=$memaddr
     load_file ${DOMU_KERNEL[$i]}

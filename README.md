@@ -86,6 +86,10 @@ Where:
 
 - DOMU_VCPUS[number] is the number of vcpus for the VM, default 1
 
+- DOMU_NOBOOT[number]: if specified, the DomU is not started
+  automatically at boot as dom0-less guest. It can still be created
+  later from Dom0.
+
 - UBOOT_SOURCE and UBOOT_SCRIPT specify the output. They are optional
   as you can pass -o FILENAME to uboot-script-gen as a command line
   parameter
