@@ -130,7 +130,8 @@ script, disk_image is run as follows:
 ```
 $ sudo bash ./scripts/disk_image -c /path/to/config-file -d . \
                                  -w /path/to/tmp/dir          \
-                                 -o /path/to/output/disk.img
+                                 -o /path/to/output/disk.img  \
+                                 -t "sd"
 ```
 
 Where:\
@@ -140,3 +141,7 @@ Where:\
 -w specifies the temporary working directory that the script uses for
    building the disk image, and if not set, one is created in /tmp\
 -o specifies the output disk image file name\
+-t specifies the u-boot command to load the binaries. "tftp", "sd" and
+   "scsi" are shorthands for "tftpb", "load mmc 0:1" and
+   "load scsi 0:1", but actually any arbitrary command can be used, for
+   instance -t "fatload" is valid.

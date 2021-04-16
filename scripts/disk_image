@@ -69,11 +69,16 @@ function write_rootfs()
 function print_help
 {
     echo "usage:"
-    echo "	$0 -c CONFIG_FILE -d UBOOT_DIRECTORY <-w WORK_DIRECTORY> -o IMG_FILE"
+    echo "	$0 -c CONFIG_FILE -d UBOOT_DIRECTORY -t UBOOT_TYPE <-w WORK_DIRECTORY> -o IMG_FILE"
     echo "	$0 -h"
     echo "where:"
     echo "	-c CONFIG_FILE - configuration file"
     echo "	-d UBOOT_DIRECTORY - root directory for the paths specified in CONFIG_FILE"
+    echo "	-t UBOOT_TYPE can be:"
+    echo "		sd - alias for \"mmc load 0:1\" for uboot load commands"
+    echo "		scsi - alias for \"scsi load 0:1\" for uboot load commands"
+    echo "		tftp - alias for \"tftpb\" for uboot load cammnds"
+    echo "		< > - used for uboot load commands"
     echo "	-w WORK_DIRECTORY - work directory used when building the image"
     echo "	-o IMG_FILE - the output img file "
     echo "Example:"
@@ -87,9 +92,25 @@ then
     exit 1
 fi
 
-while getopts ":w:d:c:o:h" opt
+while getopts ":w:d:c:t:o:h" opt
 do
     case ${opt} in
+    t )
+        case $OPTARG in
+        scsi )
+            LOAD_CMD="load scsi 0:1"
+            ;;
+        sd )
+            LOAD_CMD="load mmc 0:1"
+            ;;
+        tftp )
+            LOAD_CMD="tftpb"
+            ;;
+        * )
+            LOAD_CMD="$OPTARG"
+            ;;
+        esac
+        ;;
     w )
         DESTDIR=$OPTARG
         ;;
