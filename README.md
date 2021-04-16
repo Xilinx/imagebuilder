@@ -73,6 +73,10 @@ Where:
 
 - DOMU_KERNEL[number] specifies the DomU kernel to use.
 
+- DOMU_CMD[number] specifies the command line arguments for Dom0's Linux
+  kernel.  If "root=" isn't set, imagebuilder will try to determine it.
+  If not set at all, the default one is used.
+
 - DOMU_RAMDISK[number] specifies the DomU ramdisk to use.
 
 - DOMU_PASSTHROUGH_DTB[number] specifies the device assignment
@@ -145,3 +149,8 @@ Where:\
    "scsi" are shorthands for "tftpb", "load mmc 0:1" and
    "load scsi 0:1", but actually any arbitrary command can be used, for
    instance -t "fatload" is valid.
+
+
+disk_image also generates on the fly a xl config file for each domU and
+adds them to the dom0 rootfs partition under /etc/xen. It makes it
+easier to start those domUs from dom0.

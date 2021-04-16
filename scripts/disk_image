@@ -17,6 +17,92 @@ function check_depends()
     done
 }
 
+function add_rootfs()
+{
+    local dev=${LOAD_CMD%:*}
+    dev=${dev##* }
+    local par=${LOAD_CMD#*:}
+    local j=$1
+
+    if [ -z "$dev" ] || [ -z "$par" ]
+    then
+        echo "Could not parse device and partition."
+        exit 1
+    fi
+
+    par=$(( $par + $j ))
+
+    if [[ $LOAD_CMD =~ mmc ]]
+    then
+        retval="/dev/mmcblk${dev}p${par}"
+    elif [[ $LOAD_CMD =~ scsi ]]
+    then
+        # converts number to a scsi device character
+        dev=$((dev + 97))
+        dev=$(printf %x $dev)
+        dev=$(printf "\x$dev")
+
+        retval="/dev/sd${dev}${par}"
+    else
+        echo "Only mmc and scsi are supported for automatically setting the root partition."
+        echo "Manually set DOM0_CMD with the root device in the config file to bypass this."
+        exit 1
+    fi
+}
+
+function generate_domU_configs()
+{
+    local i=0
+    local j=$1
+    # $j + 1 - 1 as it is starting from 0
+    local n=$1
+    local dest
+
+    mount -t ext4 /dev/mapper/diskimage$j $DESTDIR/part/disk$j
+    mkdir -p $DESTDIR/part/disk$j/etc/xen
+    add_rootfs 0
+    first_part=$retval
+
+    while test $i -lt $NUM_DOMUS
+    do
+        dest="$DESTDIR/part/disk$j/etc/xen/domU$i.cfg"
+        echo "name=\"domU$i\"" >> $dest
+        echo "memory=${DOMU_MEM[$i]}" >> $dest
+        echo "vcpus=${DOMU_VCPUS[$i]}" >> $dest
+        echo "# mount $first_part /boot" >> $dest
+        echo "kernel=\"/boot/${DOMU_KERNEL[$i]}\"" >> $dest
+        if test "${DOMU_RAMDISK[$i]}"
+        then
+            echo "ramdisk=\"/boot/${DOMU_RAMDISK[$i]}\"" >> $dest
+        fi
+
+        if [ -z "${DOMU_CMD[$i]}" ]
+        then
+            DOMU_CMD[$i]="console=hvc0"
+        fi
+        if [[ ! ${DOMU_CMD[$i]} =~ root= ]]
+        then
+            if test -z "${DOMU_ROOTFS[$i]}"
+            then
+                DOMU_CMD[$i]="${DOMU_CMD[$i]} root=/dev/ram0" >> $dest
+            else
+                DOMU_CMD[$i]="${DOMU_CMD[$i]} root=/dev/xvda" >> $dest
+            fi
+        fi
+        echo "extra=\"${DOMU_CMD[$i]}\"" >> $dest
+        if test "${DOMU_ROOTFS[$i]}"
+        then
+            add_rootfs $n
+            echo "disk=[\"$retval,,xvda\"]" >> $dest
+        fi
+
+        n=$(( $n + 1 ))
+        i=$(( $i + 1 ))
+    done
+
+    umount $DESTDIR/part/disk$j
+}
+
 function add_partition()
 {
     local rootfs="$1"
@@ -157,6 +243,20 @@ check_depends
 
 source "$CFG_FILE"
 
+i=0
+while test $i -lt $NUM_DOMUS
+do
+    if test -z "${DOMU_MEM[$i]}"
+    then
+        DOMU_MEM[$i]=512
+    fi
+    if test -z "${DOMU_VCPUS[$i]}"
+    then
+        DOMU_VCPUS[$i]=1
+    fi
+    i=$(( $i + 1 ))
+done
+
 offset=$((2*1024*1024))
 _part1_size=`stat -L --printf="%s" $UBOOT_OUT/$XEN`
 _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$DOM0_KERNEL` ))
@@ -294,6 +394,7 @@ j=2
 if test "$DOM0_ROOTFS"
 then
     write_rootfs 2 "$DOM0_ROOTFS"
+    generate_domU_configs 2
     j=$(( $j + 1 ))
 fi
 
