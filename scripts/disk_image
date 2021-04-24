@@ -3,7 +3,7 @@
 # This helps to see what is going on
 set -e
 
-PROG_REQ=( kpartx mkfs.ext4 losetup sgdisk readlink )
+PROG_REQ=( kpartx mkfs.ext4 losetup sgdisk readlink awk )
 
 function check_depends()
 {
@@ -106,7 +106,25 @@ function generate_domU_configs()
 function add_partition()
 {
     local rootfs="$1"
-    _part_size=`stat -L --printf="%s" $rootfs`
+    local aux_dir=$(mktemp -d)
+
+    cd "$aux_dir"
+
+    if [[ $rootfs = *.cpio.gz ]]
+    then
+        cat "${UBOOT_OUT_ABS}/$rootfs" | gunzip | cpio -id
+        _part_size=$(du -sb| awk '{print $1}')
+    elif [[ $rootfs = *.tar.gz ]]
+    then
+        tar -xf "${UBOOT_OUT_ABS}/$rootfs"
+        _part_size=$(du -sb| awk '{print $1}')
+    else
+        echo "Ignoring $rootfs: unsupported file format. Use cpio.gz or tar.gz."
+    fi
+
+    cd -
+    rm -rf "$aux_dir"
+
     _part_size=$(( $_part_size + $offset - 1))
     _part_size=$(( $_part_size & ~($offset - 1) ))
     # account for gzip compression
@@ -141,7 +159,7 @@ function write_rootfs()
         cat "${UBOOT_OUT_ABS}/$rootfs" | gunzip | cpio -id
     elif [[ $rootfs = *.tar.gz ]]
     then
-        tar xvzf "${UBOOT_OUT_ABS}/$rootfs"
+        tar -xf "${UBOOT_OUT_ABS}/$rootfs"
     else
         echo "Ignoring $rootfs: unsupported file format. Use cpio.gz or tar.gz."
     fi
@@ -294,7 +312,7 @@ _npart=1
 
 if test "$DOM0_ROOTFS"
 then
-    add_partition "$UBOOT_OUT/$DOM0_ROOTFS"
+    add_partition "$DOM0_ROOTFS"
 fi
 
 i=0
@@ -302,7 +320,7 @@ while test $i -lt $NUM_DOMUS
 do
     if test "${DOMU_ROOTFS[$i]}"
     then
-        add_partition "$UBOOT_OUT/${DOMU_ROOTFS[$i]}"
+        add_partition "${DOMU_ROOTFS[$i]}"
     fi
     i=$(( $i + 1 ))
 done
