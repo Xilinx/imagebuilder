@@ -4,6 +4,7 @@
 set -e
 
 PROG_REQ=( kpartx mkfs.ext4 losetup sgdisk readlink awk )
+SLACK=128
 
 function check_depends()
 {
@@ -130,7 +131,7 @@ function add_partition()
     # account for gzip compression
     _part_size=$(( $_part_size * 2 ))
     # add some slack
-    _part_size=$(( 128*1024*1024 + $_part_size ))
+    _part_size=$(( $SLACK*1024*1024 + $_part_size ))
     _part_size=$(( $_part_size / 1024 / 1024 ))
     echo PART size: "$_part_size"MB
     
@@ -173,7 +174,7 @@ function write_rootfs()
 function print_help
 {
     echo "usage:"
-    echo "	$0 -c CONFIG_FILE -d UBOOT_DIRECTORY -t UBOOT_TYPE <-w WORK_DIRECTORY> -o IMG_FILE"
+    echo "	$0 -c CONFIG_FILE -d UBOOT_DIRECTORY -t UBOOT_TYPE <-w WORK_DIRECTORY> <-s SLACK> -o IMG_FILE"
     echo "	$0 -h"
     echo "where:"
     echo "	-c CONFIG_FILE - configuration file"
@@ -184,6 +185,7 @@ function print_help
     echo "		tftp - alias for \"tftpb\" for uboot load cammnds"
     echo "		< > - used for uboot load commands"
     echo "	-w WORK_DIRECTORY - work directory used when building the image"
+    echo "	-s SLACK - free MB to add to each partition, default 128"
     echo "	-o IMG_FILE - the output img file "
     echo "Example:"
     echo "	$0 -c ../config -d ./build42 -w tmp -o disk.img"
@@ -196,7 +198,7 @@ then
     exit 1
 fi
 
-while getopts ":w:d:c:t:o:h" opt
+while getopts ":w:d:c:t:s:o:h" opt
 do
     case ${opt} in
     t )
@@ -214,6 +216,14 @@ do
             LOAD_CMD="$OPTARG"
             ;;
         esac
+        ;;
+    s )
+        SLACK=$OPTARG
+        if ! test $SLACK -gt 0
+        then
+            echo "Invalid SLACK parameter."
+            exit 1
+        fi
         ;;
     w )
         DESTDIR=$OPTARG
