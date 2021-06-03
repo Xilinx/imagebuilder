@@ -272,7 +272,7 @@ fi
 
 if [ -z "$XEN_CMD" ]
 then
-    XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=1G dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null"
+    XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=1500M dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null"
 fi
 
 if [ -z "$DOM0_CMD" ]
