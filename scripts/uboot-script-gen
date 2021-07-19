@@ -251,6 +251,7 @@ function print_help
     echo "		sd - alias for \"mmc load 0:1\" for uboot load commands"
     echo "		scsi - alias for \"scsi load 0:1\" for uboot load commands"
     echo "		tftp - alias for \"tftpb\" for uboot load cammnds"
+    echo "		fit_std - used for creating a standard fit image, not compatable with dom0less (not recommended)"
     echo "		< > - used for uboot load commands"
     echo "	DIRECTORY - root directory where the files of CONFIG_FILE are located"
     echo "	FILE - output filename for the uboot script and its source, overrides option in CONFIG_FILE"
@@ -273,6 +274,9 @@ while getopts ":c:t:d:ho:" opt; do
             ;;
         tftp )
             LOAD_CMD="tftpb"
+            ;;
+        fit_std )
+            LOAD_CMD="fit_std"
             ;;
         * )
             LOAD_CMD="$OPTARG"
@@ -382,6 +386,19 @@ done
 # tftp or move the files to a partition
 cd "$uboot_dir"
 
+if test "$LOAD_CMD" = "fit_std"
+then
+     if ! test $FDTEDIT
+     then
+         FDTEDIT=${DEVICE_TREE%.dtb}
+         FDTEDIT+=-fit.dtb
+     fi
+     fit=${UBOOT_SOURCE%.source}
+     its_file=$fit.its
+     fit+=.fit
+     rm -f "$its_file"
+fi
+
 if test $FDTEDIT
 then
      rm -f $FDTEDIT
@@ -461,16 +478,176 @@ device_tree_editing $device_tree_addr
 # disable device tree reloation
 echo "setenv fdt_high 0xffffffffffffffff" >> $UBOOT_SOURCE
 echo "booti $xen_addr - $device_tree_addr" >> $UBOOT_SOURCE
-mkimage -A arm64 -T script -C none -a $uboot_addr -e $uboot_addr -d $UBOOT_SOURCE "$UBOOT_SCRIPT" &> /dev/null
+
+if test "$fit"
+then
+    # create start along with necessary binaries
+    load_files="\"dom0_linux\""
+    cat >> "$its_file" <<- EOF
+/dts-v1/;
+/ {
+    description = "Configuration to load Xen";
+    #address-cells = <1>;
+    images {
+        host_xen {
+            description = "host xen binary";
+            data = /incbin/("$XEN");
+            type = "kernel";
+            arch = "arm64";
+            os = "linux";
+            compression = "none";
+            load = <$xen_addr>;
+            entry = <$xen_addr>;
+            hash {
+                algo = "md5";
+            };
+        };
+        host_fdt {
+            description = "host fdt";
+            data = /incbin/("$FDTEDIT");
+            type = "flat_dt";
+            arch = "arm64";
+            compression = "none";
+            load = <$device_tree_addr>;
+            hash {
+                algo = "md5";
+            };
+        };
+        dom0_linux {
+            description = "dom0 linux kernel binary";
+            data = /incbin/("$DOM0_KERNEL");
+            type = "kernel";
+            arch = "arm64";
+            os = "linux";
+            compression = "none";
+            load = <$dom0_kernel_addr>;
+            hash {
+                algo = "md5";
+            };
+        };
+	EOF
+    if test "$DOM0_RAMDISK"
+    then
+        load_files+=", \"dom0_ramdisk\""
+        cat >> "$its_file" <<- EOF
+        dom0_ramdisk {
+            description = "dom0 ramdisk";
+            data = /incbin/("$DOM0_RAMDISK");
+            type = "ramdisk";
+            arch = "arm64";
+            os = "linux";
+            compression = "none";
+            load = <$dom0_ramdisk_addr>;
+            hash {
+                algo = "md5";
+            };
+        };
+	EOF
+    fi
+    # domUs
+    i=0
+    while test $i -lt $NUM_DOMUS
+    do
+        if test "${DOMU_ROOTFS[$i]}" || test "${DOMU_NOBOOT[$i]}"
+        then
+            i=$(( $i + 1 ))
+            continue
+        fi
+        load_files+=", \"domU${i}_kernel\""
+        cat >> "$its_file" <<- EOF
+        domU${i}_kernel {
+            description = "domU${i} kernel binary";
+            data = /incbin/("${DOMU_KERNEL[$i]}");
+            type = "kernel";
+            arch = "arm64";
+            os = "linux";
+            compression = "none";
+            load = <${domU_kernel_addr[$i]}>;
+            hash {
+                algo = "md5";
+            };
+        };
+	EOF
+        if test "${DOMU_RAMDISK[$i]}"
+        then
+            load_files+=", \"domU${i}_ramdisk\""
+            cat >> "$its_file" <<- EOF
+        domU${i}_ramdisk {
+            description = "domU${i} ramdisk";
+            data = /incbin/("${DOMU_RAMDISK[$i]}");
+            type = "ramdisk";
+            arch = "arm64";
+            os = "linux";
+            compression = "none";
+            load = <${domU_ramdisk_addr[$i]}>;
+            hash {
+                algo = "md5";
+            };
+        };
+	EOF
+        fi
+        if test "${DOMU_PASSTHROUGH_DTB[$i]}"
+        then
+            load_files+=", \"domU${i}_fdt\""
+            cat >> "$its_file" <<- EOF
+        domU${i}_fdt {
+            description = "domU${i} fdt";
+            data = /incbin/("${DOMU_PASSTHROUGH_DTB[$i]}");
+            type = "flat_dt";
+            arch = "arm64";
+            compression = "none";
+            load = <${domU_passthrough_dtb_addr[$i]}>;
+            hash {
+                algo = "md5";
+            };
+        };
+	EOF
+        fi
+        i=$(( $i + 1 ))
+    done
+    # end images
+    echo '    };' >> "$its_file"
+    # config
+    cat >> "$its_file" <<- EOF
+    configurations {
+        default = "config";
+        config {
+            description = "Xen";
+            kernel = "host_xen";
+            fdt = "host_fdt";
+            loadables = $load_files;
+        };
+    };
+	EOF
+    # end
+    echo '};' >> "$its_file"
+
+    mkimage -q -f "$its_file"  "$fit"
+else
+    mkimage -A arm64 -T script -C none -a $uboot_addr -e $uboot_addr -d $UBOOT_SOURCE "$UBOOT_SCRIPT" &> /dev/null
+fi
 
 remove_tmp_files
 
-memaddr=$(( $MEMORY_END - $memaddr - $offset ))
+fit_addr="$(printf "0x%x" $memaddr)"
+
+if test "$fit"
+then
+    memaddr=$(( $MEMORY_END - 2 * ( $memaddr + $offset ) ))
+else
+    memaddr=$(( $MEMORY_END - $memaddr - $offset ))
+fi
 if test $memaddr -lt 0
 then
     echo Error, not enough memory to load all binaries
     cleanup_and_return_err
 fi
 
-echo "Generated uboot script $UBOOT_SCRIPT, to be loaded at address $uboot_addr:"
-echo "$LOAD_CMD $uboot_addr $UBOOT_SCRIPT; source $uboot_addr"
+if test "$fit"
+then
+    echo "Generated uboot FIT image  $fit, to be loaded at or after address $fit_addr:"
+    echo "tftpb/load mmc 0:1/etc $fit_addr $fit; bootm $fit_addr#config"
+else
+    echo "Generated uboot script $UBOOT_SCRIPT, to be loaded at address $uboot_addr:"
+    echo "$LOAD_CMD $uboot_addr $UBOOT_SCRIPT; source $uboot_addr"
+fi
