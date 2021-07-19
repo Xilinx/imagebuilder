@@ -134,6 +134,8 @@ Where:\
    can only be used  in combination with the -k option.  This adds the
    public key into the dtb.  Then one can add this dtb back into the
    u-boot bin or elf.\
+-e specifies if bootefi should be used in the uboot script (instead of \
+   booti). This is an optional argument.
 
 ### Signed FIT images
 
