@@ -167,10 +167,16 @@ function add_size()
 function load_file()
 {
     local filename=$1
+    local fit_scr_name=$2
 
     local relative_path="$(realpath --relative-to=$PWD $filename)"
 
-    echo "$LOAD_CMD $memaddr $relative_path" >> $UBOOT_SOURCE
+    if test "$LOAD_CMD" = "imxtract"
+    then
+        echo "$LOAD_CMD \$fit_addr $fit_scr_name $memaddr" >> $UBOOT_SOURCE
+    else
+        echo "$LOAD_CMD $memaddr $relative_path" >> $UBOOT_SOURCE
+    fi
     add_size $filename
 }
 
@@ -251,6 +257,7 @@ function print_help
     echo "		sd - alias for \"mmc load 0:1\" for uboot load commands"
     echo "		scsi - alias for \"scsi load 0:1\" for uboot load commands"
     echo "		tftp - alias for \"tftpb\" for uboot load cammnds"
+    echo "		fit - creates a fit image with a boot script"
     echo "		fit_std - used for creating a standard fit image, not compatable with dom0less (not recommended)"
     echo "		< > - used for uboot load commands"
     echo "	DIRECTORY - root directory where the files of CONFIG_FILE are located"
@@ -274,6 +281,9 @@ while getopts ":c:t:d:ho:" opt; do
             ;;
         tftp )
             LOAD_CMD="tftpb"
+            ;;
+        fit )
+            LOAD_CMD="imxtract"
             ;;
         fit_std )
             LOAD_CMD="fit_std"
@@ -386,9 +396,9 @@ done
 # tftp or move the files to a partition
 cd "$uboot_dir"
 
-if test "$LOAD_CMD" = "fit_std"
+if test "$LOAD_CMD" = "fit_std" || test "$LOAD_CMD" = "imxtract"
 then
-     if ! test $FDTEDIT
+     if ! test $FDTEDIT && test "$LOAD_CMD" = "fit_std"
      then
          FDTEDIT=${DEVICE_TREE%.dtb}
          FDTEDIT+=-fit.dtb
@@ -406,6 +416,12 @@ then
 fi
 
 rm -f $UBOOT_SOURCE $UBOOT_SCRIPT
+
+if test "$LOAD_CMD" = "imxtract"
+then
+    echo 'fit_addr=$fileaddr' >>  $UBOOT_SOURCE
+fi
+
 memaddr=$(( $MEMORY_START + $offset ))
 # 12582912 is 0xc00000, 12MB
 if test $memaddr -lt 12582912
@@ -420,18 +436,18 @@ memaddr=`printf "0x%X\n" $memaddr`
 
 check_compressed_file_type $XEN "executable"
 xen_addr=$memaddr
-load_file "$XEN"
+load_file "$XEN" "host_xen"
 
 check_compressed_file_type $DOM0_KERNEL "executable"
 dom0_kernel_addr=$memaddr
-load_file $DOM0_KERNEL
+load_file $DOM0_KERNEL "dom0_linux"
 dom0_kernel_size=$filesize
 
 if test "$DOM0_RAMDISK"
 then
     check_compressed_file_type $DOM0_RAMDISK "cpio archive"
     dom0_ramdisk_addr=$memaddr
-    load_file "$DOM0_RAMDISK"
+    load_file "$DOM0_RAMDISK" "dom0_ramdisk"
     dom0_ramdisk_size=$filesize
 else
     dom0_ramdisk_addr="-"
@@ -451,20 +467,20 @@ do
     fi
     check_compressed_file_type ${DOMU_KERNEL[$i]} "executable"
     domU_kernel_addr[$i]=$memaddr
-    load_file ${DOMU_KERNEL[$i]}
+    load_file ${DOMU_KERNEL[$i]} "domU${i}_kernel"
     domU_kernel_size[$i]=$filesize
     if test "${DOMU_RAMDISK[$i]}"
     then
         check_compressed_file_type ${DOMU_RAMDISK[$i]} "cpio archive"
         domU_ramdisk_addr[$i]=$memaddr
-        load_file ${DOMU_RAMDISK[$i]}
+        load_file ${DOMU_RAMDISK[$i]} "domU${i}_ramdisk"
         domU_ramdisk_size[$i]=$filesize
     fi
     if test "${DOMU_PASSTHROUGH_DTB[$i]}"
     then
         check_compressed_file_type ${DOMU_PASSTHROUGH_DTB[$i]} "Device Tree Blob"
         domU_passthrough_dtb_addr[$i]=$memaddr
-        load_file ${DOMU_PASSTHROUGH_DTB[$i]}
+        load_file ${DOMU_PASSTHROUGH_DTB[$i]} "domU${i}_fdt"
         domU_passthrough_dtb_size[$i]=$filesize
     fi
     i=$(( $i + 1 ))
@@ -472,7 +488,7 @@ done
 
 check_file_type $DEVICE_TREE "Device Tree Blob"
 device_tree_addr=$memaddr
-load_file $DEVICE_TREE
+load_file $DEVICE_TREE "host_fdt"
 device_tree_editing $device_tree_addr
 
 # disable device tree reloation
@@ -483,6 +499,12 @@ if test "$fit"
 then
     # create start along with necessary binaries
     load_files="\"dom0_linux\""
+    if test "$LOAD_CMD" = "imxtract"
+    then
+        its_dt="$DEVICE_TREE"
+    else
+        its_dt="$FDTEDIT"
+    fi
     cat >> "$its_file" <<- EOF
 /dts-v1/;
 / {
@@ -504,7 +526,7 @@ then
         };
         host_fdt {
             description = "host fdt";
-            data = /incbin/("$FDTEDIT");
+            data = /incbin/("$its_dt");
             type = "flat_dt";
             arch = "arm64";
             compression = "none";
@@ -605,10 +627,29 @@ then
         fi
         i=$(( $i + 1 ))
     done
+    # script for fit
+    if test "$LOAD_CMD" = "imxtract"
+    then
+        cat >> "$its_file" <<- EOF
+        boot_scr {
+            description = "imagebuilder's boot script";
+            data = /incbin/("$UBOOT_SOURCE");
+            type = "script";
+            compression = "none";
+            load = <$uboot_addr>;
+            entry = <$uboot_addr>;
+            hash {
+                algo = "md5";
+            };
+        };
+	EOF
+    fi
     # end images
     echo '    };' >> "$its_file"
     # config
-    cat >> "$its_file" <<- EOF
+    if ! test "$LOAD_CMD" = "imxtract"
+    then
+        cat >> "$its_file" <<- EOF
     configurations {
         default = "config";
         config {
@@ -619,6 +660,7 @@ then
         };
     };
 	EOF
+    fi
     # end
     echo '};' >> "$its_file"
 
@@ -646,7 +688,12 @@ fi
 if test "$fit"
 then
     echo "Generated uboot FIT image  $fit, to be loaded at or after address $fit_addr:"
-    echo "tftpb/load mmc 0:1/etc $fit_addr $fit; bootm $fit_addr#config"
+    if test "$LOAD_CMD" = "imxtract"
+    then
+        echo "tftpb/load mmc 0:1/etc $fit_addr $fit; source $fit_addr:boot_scr"
+    else
+        echo "tftpb/load mmc 0:1/etc $fit_addr $fit; bootm $fit_addr#config"
+    fi
 else
     echo "Generated uboot script $UBOOT_SCRIPT, to be loaded at address $uboot_addr:"
     echo "$LOAD_CMD $uboot_addr $UBOOT_SCRIPT; source $uboot_addr"
