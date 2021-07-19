@@ -2,7 +2,7 @@
 
 offset=$((2*1024*1024))
 filesize=0
-prog_req=(mkimage file)
+prog_req=(mkimage file fdtput)
 tmp_files=()
 
 function remove_tmp_files()
@@ -20,17 +20,65 @@ function cleanup_and_return_err()
     exit 1
 }
 
+function dt_mknode()
+{
+    local path=$1
+    local addr=$2
+
+    if test $UBOOT_SOURCE
+    then
+        echo "fdt mknod $path $addr" >> $UBOOT_SOURCE
+    fi
+}
+
+# data_type is either
+#   int
+#   hex
+#   str
+function dt_set()
+{
+    local path=$1
+    local var=$2
+    local data_type=$3
+    local data=$4
+
+
+    if test $UBOOT_SOURCE
+    then
+        if test $data_type = "hex" || test $data_type = "int"
+        then
+            echo "fdt set $path $var <$data>" >> $UBOOT_SOURCE
+        else
+            echo "fdt set $path $var $data" >> $UBOOT_SOURCE
+        fi
+    fi
+
+    if test $FDTEDIT
+    then
+        if test $data_type = "hex"
+        then
+            fdtput $FDTEDIT -p -t x $path $var $data
+        elif test $data_type = "int"
+        then
+            fdtput $FDTEDIT -p -t i $path $var $data
+        else
+            fdtput $FDTEDIT -p -t s $path $var $data
+        fi
+    fi
+}
+
 function add_device_tree_kernel()
 {
     local path=$1
     local addr=$2
     local size=$3
 
-    echo "fdt mknod $path module$addr" >> $UBOOT_SOURCE
-    echo "fdt set $path/module$addr compatible \"multiboot,kernel\" \"multiboot,module\"" >> $UBOOT_SOURCE
-    echo "fdt set $path/module$addr reg <0x0 "$addr" 0x0 "$size">" >> $UBOOT_SOURCE
-    echo "fdt set $path/module$addr bootargs \"console=ttyAMA0\"" >> $UBOOT_SOURCE
+    dt_mknode "$path" "module$addr"
+    dt_set "$path/module$addr" "compatible" "str" "\"multiboot,kernel\" \"multiboot,module\""
+    dt_set "$path/module$addr" "reg" "hex"  "0x0 $addr 0x0 $(printf "0x%x" $size)"
+    dt_set "$path/module$addr" "bootargs" "str" "\"console=ttyAMA0\""
 }
+
 
 function add_device_tree_ramdisk()
 {
@@ -38,10 +86,11 @@ function add_device_tree_ramdisk()
     local addr=$2
     local size=$3
 
-    echo "fdt mknod $path module$addr" >> $UBOOT_SOURCE
-    echo "fdt set $path/module$addr compatible \"multiboot,ramdisk\" \"multiboot,module\"" >> $UBOOT_SOURCE
-    echo "fdt set $path/module$addr reg <0x0 "$addr" 0x0 "$size">" >> $UBOOT_SOURCE
+    dt_mknode "$path"  "module$addr"
+    dt_set "$path/module$addr" "compatible" "str" "\"multiboot,ramdisk\" \"multiboot,module\""
+    dt_set "$path/module$addr" "reg" "hex"  "0x0 $addr 0x0 $(printf "0x%x" $size)"
 }
+
 
 function add_device_tree_passthrough()
 {
@@ -49,34 +98,32 @@ function add_device_tree_passthrough()
     local addr=$2
     local size=$3
 
-    echo "fdt mknod $path module$addr" >> $UBOOT_SOURCE
-    echo "fdt set $path/module$addr compatible \"multiboot,device-tree\" \"multiboot,module\"" >> $UBOOT_SOURCE
-    echo "fdt set $path/module$addr reg <0x0 "$addr" 0x0 "$size">" >> $UBOOT_SOURCE
+    dt_mknode "$path"  "module$addr"
+    dt_set "$path/module$addr" "compatible" "str" "\"multiboot,device-tree\" \"multiboot,module\""
+    dt_set "$path/module$addr" "reg" "hex"  "0x0 $addr 0x0 $(printf "0x%x" $size)"
 }
 
 function device_tree_editing()
 {
     local device_tree_addr=$1
 
-    echo "fdt addr $device_tree_addr" >> $UBOOT_SOURCE
-    echo "fdt resize 1024" >> $UBOOT_SOURCE
-    echo "fdt set /chosen \#address-cells <0x2>" >> $UBOOT_SOURCE
-    echo "fdt set /chosen \#size-cells <0x2>" >> $UBOOT_SOURCE
-    echo "fdt set /chosen xen,xen-bootargs \"$XEN_CMD\"" >> $UBOOT_SOURCE
-    echo "fdt mknod /chosen dom0" >> $UBOOT_SOURCE
-    echo "fdt set /chosen/dom0 compatible \"xen,linux-zimage\" \"xen,multiboot-module\"" >> $UBOOT_SOURCE
-    echo "fdt set /chosen/dom0 reg <0x0 "$dom0_kernel_addr" 0x0 "$dom0_kernel_size">" >> $UBOOT_SOURCE
-    if test "$DOM0_RAMDISK"
+    if test $UBOOT_SOURCE
     then
-        echo "fdt set /chosen xen,dom0-bootargs \"$DOM0_CMD\"" >> $UBOOT_SOURCE
-        if test $dom0_ramdisk_addr != "-"
-        then
-            echo "fdt mknod /chosen dom0-ramdisk" >> $UBOOT_SOURCE
-            echo "fdt set /chosen/dom0-ramdisk compatible \"xen,linux-initrd\" \"xen,multiboot-module\"" >> $UBOOT_SOURCE
-            echo "fdt set /chosen/dom0-ramdisk reg <0x0 "$dom0_ramdisk_addr" 0x0 "$dom0_ramdisk_size">" >> $UBOOT_SOURCE
-        fi
-    else
-        echo "fdt set /chosen xen,dom0-bootargs \"$DOM0_CMD\"" >> $UBOOT_SOURCE
+        echo "fdt addr $device_tree_addr" >> $UBOOT_SOURCE
+        echo "fdt resize 1024" >> $UBOOT_SOURCE
+    fi
+    dt_set "/chosen" "\#address-cells" "hex" "0x2"
+    dt_set "/chosen" "\#size-cells" "hex" "0x2"
+    dt_set "/chosen" "xen,xen-bootargs" "str" "\"$XEN_CMD\""
+    dt_mknode "/chosen" "dom0"
+    dt_set "/chosen/dom0" "compatible" "str" "\"xen,linux-zimage\" \"xen,multiboot-module\""
+    dt_set "/chosen/dom0" "reg" "hex" "0x0 $dom0_kernel_addr 0x0 $(printf "0x%x" $dom0_kernel_size)"
+    dt_set "/chosen" "xen,dom0-bootargs" "str" "\"$DOM0_CMD\""
+    if test "$DOM0_RAMDISK" && test $dom0_ramdisk_addr != "-"
+    then
+        dt_mknode "/chosen" "dom0-ramdisk"
+        dt_set "/chosen/dom0-ramdisk" "compatible" "str" "\"xen,linux-initrd\" \"xen,multiboot-module\""
+        dt_set "/chosen/dom0-ramdisk" "reg" "hex" "0x0 $dom0_ramdisk_addr 0x0 $(printf "0x%x" $dom0_ramdisk_size)"
     fi
 
     i=0
@@ -87,13 +134,13 @@ function device_tree_editing()
             i=$(( $i + 1 ))
             continue
         fi
-        echo "fdt mknod /chosen domU$i" >> $UBOOT_SOURCE
-        echo "fdt set /chosen/domU$i compatible \"xen,domain\"" >> $UBOOT_SOURCE
-        echo "fdt set /chosen/domU$i \#address-cells <0x2>" >> $UBOOT_SOURCE
-        echo "fdt set /chosen/domU$i \#size-cells <0x2>" >> $UBOOT_SOURCE
-        echo "fdt set /chosen/domU$i memory <0x0 "${DOMU_MEM[$i]}">" >> $UBOOT_SOURCE
-        echo "fdt set /chosen/domU$i cpus <"${DOMU_VCPUS[$i]}">" >> $UBOOT_SOURCE
-        echo "fdt set /chosen/domU$i vpl011 <0x1>" >> $UBOOT_SOURCE
+        dt_mknode "/chosen" "domU$i"
+        dt_set "/chosen/domU$i" "compatible" "str" "\"xen,domain\""
+        dt_set "/chosen/domU$i" "\#address-cells" "hex" "0x2"
+        dt_set "/chosen/domU$i" "\#size-cells" "hex" "0x2"
+        dt_set "/chosen/domU$i" "memory" "int" "0 ${DOMU_MEM[$i]}"
+        dt_set "/chosen/domU$i" "cpus" "int" "${DOMU_VCPUS[$i]}"
+        dt_set "/chosen/domU$i" "vpl011" "hex" "0x1"
         add_device_tree_kernel "/chosen/domU$i" ${domU_kernel_addr[$i]} ${domU_kernel_size[$i]}
         if test "${domU_ramdisk_addr[$i]}"
         then
@@ -334,6 +381,12 @@ done
 # the cd is needed so that the relative paths will match once we use
 # tftp or move the files to a partition
 cd "$uboot_dir"
+
+if test $FDTEDIT
+then
+     rm -f $FDTEDIT
+     cp $DEVICE_TREE $FDTEDIT
+fi
 
 rm -f $UBOOT_SOURCE $UBOOT_SCRIPT
 memaddr=$(( $MEMORY_START + $offset ))

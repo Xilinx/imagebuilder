@@ -47,6 +47,7 @@ DOMU_VCPUS[1]=1
 
 UBOOT_SOURCE="boot.source"
 UBOOT_SCRIPT="boot.scr"
+FDTEDIT="imagebuilder.dtb"
 ```
 
 Where:
@@ -93,6 +94,9 @@ Where:
 - UBOOT_SOURCE and UBOOT_SCRIPT specify the output. They are optional
   as you can pass -o FILENAME to uboot-script-gen as a command line
   parameter
+
+- FDTEDIT is an optional and is off by default.  Specifies the output
+  modifited dtb, used for reference only.
 
 Then you can invoke uboot-script-gen as follows:
 
