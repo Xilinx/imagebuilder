@@ -111,6 +111,16 @@ function device_tree_editing()
     then
         echo "fdt addr $device_tree_addr" >> $UBOOT_SOURCE
         echo "fdt resize 1024" >> $UBOOT_SOURCE
+
+        if test $NUM_DT_OVERLAY && test $NUM_DT_OVERLAY -gt 0
+        then
+            i=0
+            while test $i -lt $NUM_DT_OVERLAY
+            do
+                echo "fdt apply ${dt_overlay_addr[$i]}" >> $UBOOT_SOURCE
+                i=$(( $i + 1 ))
+            done
+        fi
     fi
     dt_set "/chosen" "\#address-cells" "hex" "0x2"
     dt_set "/chosen" "\#size-cells" "hex" "0x2"
@@ -515,6 +525,23 @@ do
     i=$(( $i + 1 ))
 done
 
+if test $NUM_DT_OVERLAY && test $NUM_DT_OVERLAY -gt 0
+then
+    i=0
+    while test $i -lt $NUM_DT_OVERLAY
+    do
+        if [ ! -f "${DT_OVERLAY[$i]}" ]
+        then
+            echo "Can not find ${DT_OVERLAY[$i]}, exiting"
+            cleanup_and_return_err
+        fi
+        check_file_type "${DT_OVERLAY[$i]}" "Device Tree Blob"
+        dt_overlay_addr[$i]=$memaddr
+        load_file "${DT_OVERLAY[$i]}" "host_fdto${i}"
+        i=$(( $i + 1 ))
+    done
+fi
+
 check_file_type $DEVICE_TREE "Device Tree Blob"
 device_tree_addr=$memaddr
 load_file $DEVICE_TREE "host_fdt"
@@ -642,6 +669,28 @@ then
         fi
         i=$(( $i + 1 ))
     done
+    fdt_line="fdt = \"host_fdt\""
+    if test $NUM_DT_OVERLAY && test $NUM_DT_OVERLAY -gt 0
+    then
+        i=0
+        while test $i -lt $NUM_DT_OVERLAY
+        do
+            cat >> "$its_file" <<- EOF
+        host_fdto${i} {
+            description = "host fdt overlay ${i}";
+            data = /incbin/("${DT_OVERLAY[$i]}");
+            type = "flat_dt";
+            arch = "arm64";
+            compression = "none";
+            load = <${dt_overlay_addr[$i]}>;
+            $fit_algo
+        };
+	EOF
+            fdt_line+=", \"host_fdto${i}\""
+            i=$(( $i + 1 ))
+        done
+    fi
+    fdt_line+=";"
     # script for fit
     if test "$LOAD_CMD" = "imxtract"
     then
@@ -666,7 +715,7 @@ then
         config {
             description = "Xen";
             kernel = "host_xen";
-            fdt = "host_fdt";
+            $fdt_line
             loadables = $load_files;
         };
     };
