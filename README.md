@@ -117,6 +117,29 @@ Where:\
    produces a standard style of fit image without a script, but has
    issues with dom0less configurations and isn't recommended. \
 -o specifies the output filename for the uboot script and its source.\
+-k specifies the key directory for signing images in a FIT image and the
+   hint.  The hint is the name of the crt and key files minus the
+   suffix (<hint>.key, <hint>.crt).  This is optional and but enables
+   signature for the fit or fit_std -t options.\
+-u specifies the U-boot control dtb.  This is an optional argument but
+   can only be used  in combination with the -k option.  This adds the
+   public key into the dtb.  Then one can add this dtb back into the
+   u-boot bin or elf.\
+
+### Signed FIT images
+
+Signed FIT images are a way to sign images with asymmetrical keys. While 
+making the FIT image, images are signed with a private key; then during
+boot U-Boot uses a public key in its control dtb to verify the 
+signatures. Some of the U-Boot config options needed are:
+CONFIG_FIT_SIGNATURE=y\
+CONFIG_RSA=y\
+CONFIG_LEGACY_IMAGE_FORMAT=n\
+
+Once U-boot is built, then take the control dtb, supply it to
+Imagebuilder when building a signed image, then use it when booting.
+For generating the keys and other documentation, see:\
+u-boot/doc/uImage.FIT/signature.txt\
 
 
 ## scripts/disk\_image
