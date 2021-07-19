@@ -249,7 +249,7 @@ function print_help
 {
     script=`basename "$0"`
     echo "usage:"
-    echo "	$script -c CONFIG_FILE -t UBOOT_TYPE -d DIRECTORY [-o FILE]"
+    echo "	$script -c CONFIG_FILE -t UBOOT_TYPE -d DIRECTORY [-o FILE] [-k KEY_DIR/HINT [-u U-BOOT_DTB]]"
     echo "	$script -h"
     echo "where:"
     echo "	CONFIG_FILE - configuration file"
@@ -262,6 +262,9 @@ function print_help
     echo "		< > - used for uboot load commands"
     echo "	DIRECTORY - root directory where the files of CONFIG_FILE are located"
     echo "	FILE - output filename for the uboot script and its source, overrides option in CONFIG_FILE"
+    echo "	KEY_DIR - key directory used for signing a fit image"
+    echo "	HINT - the file name of the crt and key file minus the suffix (ex, hint.crt and hint.key)"
+    echo "	U-BOOT_DTB - u-boot control dtb so that the public key gets added to it"
     echo "	-h - prints out the help message and exits "
     echo "Defaults:"
     echo "	CONFIG_FILE=$cfg_file, UBOOT_TYPE=\"LOAD_CMD\" env var, DIRECTORY=$uboot_dir"
@@ -269,7 +272,7 @@ function print_help
     echo "	$script -c ../config -d ./build42 -t \"scsi load 1:1\""
 }
 
-while getopts ":c:t:d:ho:" opt; do
+while getopts ":c:t:d:ho:k:u:" opt; do
     case ${opt} in
     t )
         case $OPTARG in
@@ -301,6 +304,12 @@ while getopts ":c:t:d:ho:" opt; do
         ;;
     o )
         UBOOT_SCRIPT_ARG=$OPTARG
+        ;;
+    k )
+        FIT_ENC_KEY_DIR=$OPTARG
+        ;;
+    u )
+        FIT_ENC_UB_DTB=$OPTARG
         ;;
     h )
         print_help
@@ -391,6 +400,26 @@ do
     fi
     i=$(( $i + 1 ))
 done
+
+fit_algo=$'hash {\n                algo = "md5";\n            };'
+if test "$FIT_ENC_KEY_DIR" || test "$FIT_ENC_UB_DTB"
+then
+    if ! test "$FIT_ENC_KEY_DIR" && test "$FIT_ENC_UB_DTB"
+    then
+        echo "if encryption, you need to specify the key directory"
+        exit 1
+    fi
+
+    key_hint="${FIT_ENC_KEY_DIR##*/}"
+    key_dir="${FIT_ENC_KEY_DIR%/*}/"
+
+    fit_enc_opt="-r -k $key_dir"
+    if test "$FIT_ENC_UB_DTB"
+    then
+        fit_enc_opt+=" -K $FIT_ENC_UB_DTB"
+    fi
+    fit_algo=$'signature {\n                algo = \"sha1,rsa2048\";\n                key-name-hint = \"'"$key_hint"$'\";\n};'
+fi
 
 # the cd is needed so that the relative paths will match once we use
 # tftp or move the files to a partition
@@ -520,9 +549,7 @@ then
             compression = "none";
             load = <$xen_addr>;
             entry = <$xen_addr>;
-            hash {
-                algo = "md5";
-            };
+            $fit_algo
         };
         host_fdt {
             description = "host fdt";
@@ -531,9 +558,7 @@ then
             arch = "arm64";
             compression = "none";
             load = <$device_tree_addr>;
-            hash {
-                algo = "md5";
-            };
+            $fit_algo
         };
         dom0_linux {
             description = "dom0 linux kernel binary";
@@ -543,9 +568,7 @@ then
             os = "linux";
             compression = "none";
             load = <$dom0_kernel_addr>;
-            hash {
-                algo = "md5";
-            };
+            $fit_algo
         };
 	EOF
     if test "$DOM0_RAMDISK"
@@ -560,9 +583,7 @@ then
             os = "linux";
             compression = "none";
             load = <$dom0_ramdisk_addr>;
-            hash {
-                algo = "md5";
-            };
+            $fit_algo
         };
 	EOF
     fi
@@ -585,9 +606,7 @@ then
             os = "linux";
             compression = "none";
             load = <${domU_kernel_addr[$i]}>;
-            hash {
-                algo = "md5";
-            };
+            $fit_algo
         };
 	EOF
         if test "${DOMU_RAMDISK[$i]}"
@@ -602,9 +621,7 @@ then
             os = "linux";
             compression = "none";
             load = <${domU_ramdisk_addr[$i]}>;
-            hash {
-                algo = "md5";
-            };
+            $fit_algo
         };
 	EOF
         fi
@@ -619,9 +636,7 @@ then
             arch = "arm64";
             compression = "none";
             load = <${domU_passthrough_dtb_addr[$i]}>;
-            hash {
-                algo = "md5";
-            };
+            $fit_algo
         };
 	EOF
         fi
@@ -638,18 +653,14 @@ then
             compression = "none";
             load = <$uboot_addr>;
             entry = <$uboot_addr>;
-            hash {
-                algo = "md5";
-            };
+            $fit_algo
         };
 	EOF
     fi
     # end images
     echo '    };' >> "$its_file"
-    # config
-    if ! test "$LOAD_CMD" = "imxtract"
-    then
-        cat >> "$its_file" <<- EOF
+    # config, signing requires a config even if it isn't used
+    cat >> "$its_file" <<- EOF
     configurations {
         default = "config";
         config {
@@ -660,11 +671,10 @@ then
         };
     };
 	EOF
-    fi
     # end
     echo '};' >> "$its_file"
 
-    mkimage -q -f "$its_file"  "$fit"
+    mkimage -q -f "$its_file" $fit_enc_opt "$fit"
 else
     mkimage -A arm64 -T script -C none -a $uboot_addr -e $uboot_addr -d $UBOOT_SOURCE "$UBOOT_SCRIPT" &> /dev/null
 fi
