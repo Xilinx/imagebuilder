@@ -272,16 +272,16 @@ function print_help
 {
     script=`basename "$0"`
     echo "usage:"
-    echo "	$script -c CONFIG_FILE -t UBOOT_TYPE -d DIRECTORY [-o FILE] [-k KEY_DIR/HINT [-u U-BOOT_DTB]] [-e]"
+    echo "	$script -c CONFIG_FILE -d DIRECTORY [-t LOAD_CMD] [-o FILE] [-k KEY_DIR/HINT [-u U-BOOT_DTB]] [-e]"
     echo "	$script -h"
     echo "where:"
     echo "	CONFIG_FILE - configuration file"
-    echo "	UBOOT_TYPE can be:"
+    echo "	DIRECTORY - root directory where the files of CONFIG_FILE are located"
+    echo "	LOAD_CMD can be:"
     echo "		sd - alias for \"load mmc 0:1\" for uboot load commands"
     echo "		scsi - alias for \"load scsi 0:1\" for uboot load commands"
     echo "		tftp - alias for \"tftpb\" for uboot load cammnds"
     echo "		< > - used for uboot load commands"
-    echo "	DIRECTORY - root directory where the files of CONFIG_FILE are located"
     echo "	FILE - output filename for the uboot script and its source, overrides option in CONFIG_FILE"
     echo "	KEY_DIR - key directory used for signing a fit image"
     echo "	HINT - the file name of the crt and key file minus the suffix (ex, hint.crt and hint.key)"
@@ -300,16 +300,16 @@ while getopts ":c:t:d:ho:k:u:ef" opt; do
     t )
         case $OPTARG in
         scsi )
-            LOAD_CMD="load scsi 0:1"
+            load_opt="load scsi 0:1"
             ;;
         sd )
-            LOAD_CMD="load mmc 0:1"
+            load_opt="load mmc 0:1"
             ;;
         tftp )
-            LOAD_CMD="tftpb"
+            load_opt="tftpb"
             ;;
         * )
-            LOAD_CMD="$OPTARG"
+            load_opt="$OPTARG"
             ;;
         esac
         ;;
@@ -346,7 +346,7 @@ while getopts ":c:t:d:ho:k:u:ef" opt; do
 done
 shift $((OPTIND -1))
 
-if [ -z "$LOAD_CMD" ] || [ -z "$cfg_file" ] || [ -z "$uboot_dir" ]
+if test ! "$cfg_file" -o ! "$uboot_dir"
 then
     echo "Undefined arguments, see \"$0 -h\""
     exit 1
@@ -355,6 +355,16 @@ fi
 check_depends
 
 source "$cfg_file"
+
+if test "$load_opt"
+then
+    LOAD_CMD="$load_opt"
+fi
+if test ! "$LOAD_CMD"
+then
+    echo "LOAD_CMD not set, either specify it in the config or set it with the -t option"
+    exit 1
+fi
 
 # CLI ARG overrides what's in the config file
 if [ ! -z "$UBOOT_SCRIPT_ARG" ]

@@ -29,6 +29,7 @@ To use it, first write a config file like `config`:
 MEMORY_START="0x0"
 MEMORY_END="0x80000000"
 EFI=y
+LOAD_CMD="tftpb"
 
 DEVICE_TREE="mpsoc.dtb"
 XEN="xen"
@@ -61,6 +62,11 @@ FIT="boot.fit"
 
 Where:
 - MEMORY_START and MEMORY_END specify the start and end of RAM.
+
+- LOAD_CMD specifies the u-boot command used to load the binaries. This
+  can be left out of the config and be (over)written by the -t CLI
+  argument. It has to be set either in the config file or CLI argument
+  though.
 
 - EFI specifies if the bootefi boot command should be used over booti.
   If set to anything other than "n", "no", or "false" it will enable
