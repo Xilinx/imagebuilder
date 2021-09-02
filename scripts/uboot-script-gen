@@ -256,370 +256,128 @@ function check_compressed_file_type()
     check_file_type $filename "$type"
 }
 
-function check_depends()
+function xen_config()
 {
-    for ((i=0; i<${#prog_req[@]}; i++))
-    do
-        if ! command -v ${prog_req[i]} > /dev/null
+    if [ -z "$XEN_CMD" ]
+    then
+        XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=1G dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null"
+    fi
+
+    if [ -z "$DOM0_CMD" ]
+    then
+        DOM0_CMD="console=hvc0 earlycon=xen earlyprintk=xen clk_ignore_unused"
+    fi
+    if [[ ! $DOM0_CMD =~ root= ]]
+    then
+        if test -z "$DOM0_ROOTFS"
         then
-            echo "Please install the needed program: ${prog_req[i]}."
-            exit 1
+            DOM0_CMD="$DOM0_CMD root=/dev/ram0"
+        else
+            DEV=${LOAD_CMD%:*}
+            DEV=${DEV##* }
+            PAR=${LOAD_CMD#*:}
+
+            if [ -z "$DEV" ] || [ -z "$PAR" ]
+            then
+                echo "Could not parse device and partition."
+                echo "Please make sure the load command is correct or manually set DOM0_CMD in the config file."
+                exit 1
+            fi
+
+            PAR=$((PAR + 1))
+
+            if [[ $LOAD_CMD =~ mmc ]]
+            then
+                DOM0_CMD="$DOM0_CMD root=/dev/mmcblk${DEV}p${PAR}"
+            elif [[ $LOAD_CMD =~ scsi ]]
+            then
+                # converts number to a scsi device character
+                DEV=$((DEV + 97))
+                DEV=$(printf %x $DEV)
+                DEV=$(printf "\x$DEV")
+
+                DOM0_CMD="$DOM0_CMD root=/dev/sd${DEV}${PAR}"
+            else
+                echo "Only mmc and scsi are supported for automatically setting the root partition."
+                echo "Manually set DOM0_CMD with the root device in the config file to bypass this."
+                exit 1
+            fi
         fi
+    fi
+    i=0
+    while test $i -lt $NUM_DOMUS
+    do
+        if test -z "${DOMU_MEM[$i]}"
+        then
+            DOMU_MEM[$i]=512
+        fi
+        DOMU_MEM[$i]=$((${DOMU_MEM[$i]} * 1024))
+        if test -z "${DOMU_VCPUS[$i]}"
+        then
+            DOMU_VCPUS[$i]=1
+        fi
+        i=$(( $i + 1 ))
     done
 }
 
-function print_help
+xen_file_loading()
 {
-    script=`basename "$0"`
-    echo "usage:"
-    echo "	$script -c CONFIG_FILE -d DIRECTORY [-t LOAD_CMD] [-o FILE] [-k KEY_DIR/HINT [-u U-BOOT_DTB]] [-e] [-f]"
-    echo "	$script -h"
-    echo "where:"
-    echo "	CONFIG_FILE - configuration file"
-    echo "	DIRECTORY - root directory where the files of CONFIG_FILE are located"
-    echo "	LOAD_CMD can be:"
-    echo "		sd - alias for \"load mmc 0:1\" for uboot load commands"
-    echo "		scsi - alias for \"load scsi 0:1\" for uboot load commands"
-    echo "		tftp - alias for \"tftpb\" for uboot load cammnds"
-    echo "		< > - used for uboot load commands"
-    echo "	FILE - output filename for the uboot script and its source, overrides option in CONFIG_FILE"
-    echo "	KEY_DIR - key directory used for signing a fit image"
-    echo "	HINT - the file name of the crt and key file minus the suffix (ex, hint.crt and hint.key)"
-    echo "	U-BOOT_DTB - u-boot control dtb so that the public key gets added to it"
-    echo "	-e - uses efiboot rather than booti"
-    echo "	-f - enable generating a FIT image"
-    echo "	-h - prints out the help message and exits "
-    echo "Defaults:"
-    echo "	CONFIG_FILE=$cfg_file, UBOOT_TYPE=\"LOAD_CMD\" env var, DIRECTORY=$uboot_dir"
-    echo "Example:"
-    echo "	$script -c ../config -d ./build42 -t \"scsi load 1:1\""
-}
+    check_compressed_file_type $XEN "executable"
+    xen_addr=$memaddr
+    load_file "$XEN" "host_xen"
 
-while getopts ":c:t:d:ho:k:u:ef" opt; do
-    case ${opt} in
-    t )
-        case $OPTARG in
-        scsi )
-            load_opt="load scsi 0:1"
-            ;;
-        sd )
-            load_opt="load mmc 0:1"
-            ;;
-        tftp )
-            load_opt="tftpb"
-            ;;
-        * )
-            load_opt="$OPTARG"
-            ;;
-        esac
-        ;;
-    c )
-        cfg_file=$OPTARG
-        ;;
-    d )
-        uboot_dir=$OPTARG
-        ;;
-    o )
-        UBOOT_SCRIPT_ARG=$OPTARG
-        ;;
-    k )
-        fits_keyd_opt=$OPTARG
-        ;;
-    u )
-        fits_dtb_opt=$OPTARG
-        ;;
-    e )
-        efi_opt=y
-        ;;
-    f )
-        fit_opt=y
-        ;;
-    h )
-        print_help
-        exit 0
-        ;;
-    * )
-        echo "Unknown option, see \"$0 -h\""
-        exit 1
-        ;;
-    esac
-done
-shift $((OPTIND -1))
+    check_compressed_file_type $DOM0_KERNEL "executable"
+    dom0_kernel_addr=$memaddr
+    load_file $DOM0_KERNEL "dom0_linux"
+    dom0_kernel_size=$filesize
 
-if test ! "$cfg_file" -o ! "$uboot_dir"
-then
-    echo "Undefined arguments, see \"$0 -h\""
-    exit 1
-fi
-
-check_depends
-
-source "$cfg_file"
-
-if test "$load_opt"
-then
-    LOAD_CMD="$load_opt"
-fi
-if test ! "$LOAD_CMD"
-then
-    echo "LOAD_CMD not set, either specify it in the config or set it with the -t option"
-    exit 1
-fi
-
-# CLI ARG overrides what's in the config file
-if [ ! -z "$UBOOT_SCRIPT_ARG" ]
-then
-    UBOOT_SCRIPT="$UBOOT_SCRIPT_ARG".scr
-    UBOOT_SOURCE="$UBOOT_SCRIPT_ARG".source
-fi
-
-if [ -z "$XEN_CMD" ]
-then
-    XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=1G dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null"
-fi
-
-if [ -z "$DOM0_CMD" ]
-then
-    DOM0_CMD="console=hvc0 earlycon=xen earlyprintk=xen clk_ignore_unused"
-fi
-if [[ ! $DOM0_CMD =~ root= ]]
-then
-    if test -z "$DOM0_ROOTFS"
+    if test "$DOM0_RAMDISK"
     then
-        DOM0_CMD="$DOM0_CMD root=/dev/ram0"
+        check_compressed_file_type $DOM0_RAMDISK "cpio archive"
+        dom0_ramdisk_addr=$memaddr
+        load_file "$DOM0_RAMDISK" "dom0_ramdisk"
+        dom0_ramdisk_size=$filesize
     else
-        DEV=${LOAD_CMD%:*}
-        DEV=${DEV##* }
-        PAR=${LOAD_CMD#*:}
+        dom0_ramdisk_addr="-"
+    fi
 
-        if [ -z "$DEV" ] || [ -z "$PAR" ]
+    i=0
+    while test $i -lt $NUM_DOMUS
+    do
+        if test "${DOMU_ROOTFS[$i]}" || test "${DOMU_NOBOOT[$i]}"
         then
-            echo "Could not parse device and partition."
-            echo "Please make sure the load command is correct or manually set DOM0_CMD in the config file."
-            exit 1
-        fi
-
-        PAR=$((PAR + 1))
-
-        if [[ $LOAD_CMD =~ mmc ]]
-        then
-            DOM0_CMD="$DOM0_CMD root=/dev/mmcblk${DEV}p${PAR}"
-        elif [[ $LOAD_CMD =~ scsi ]]
-        then
-            # converts number to a scsi device character
-            DEV=$((DEV + 97))
-            DEV=$(printf %x $DEV)
-            DEV=$(printf "\x$DEV")
-
-            DOM0_CMD="$DOM0_CMD root=/dev/sd${DEV}${PAR}"
-        else
-            echo "Only mmc and scsi are supported for automatically setting the root partition."
-            echo "Manually set DOM0_CMD with the root device in the config file to bypass this."
-            exit 1
-        fi
-    fi
-fi
-i=0
-while test $i -lt $NUM_DOMUS
-do
-    if test -z "${DOMU_MEM[$i]}"
-    then
-        DOMU_MEM[$i]=512
-    fi
-    DOMU_MEM[$i]=$((${DOMU_MEM[$i]} * 1024))
-    if test -z "${DOMU_VCPUS[$i]}"
-    then
-        DOMU_VCPUS[$i]=1
-    fi
-    i=$(( $i + 1 ))
-done
-
-if test "$efi_opt"
-then
-    EFI="y"
-fi
-
-if test "$fit_opt" && ! test "$FIT"
-then
-    FIT="${UBOOT_SOURCE%.source}.fit"
-fi
-
-if test "$fits_keyd_opt"
-then
-    FIT_ENC_KEY_DIR="$fits_keyd_opt"
-fi
-if test "$fits_dtb_opt"
-then
-    FIT_ENC_UB_DTB="$fits_dtb_opt"
-fi
-fit_algo=$'hash {\n                algo = "md5";\n            };'
-if test "$FIT_ENC_KEY_DIR" || test "$FIT_ENC_UB_DTB"
-then
-    if ! test "$FIT_ENC_KEY_DIR" && test "$FIT_ENC_UB_DTB"
-    then
-        echo "if encryption, you need to specify the key directory"
-        exit 1
-    fi
-
-    key_hint="${FIT_ENC_KEY_DIR##*/}"
-    key_dir="${FIT_ENC_KEY_DIR%/*}/"
-
-    fit_enc_opt="-r -k $key_dir"
-    if test "$FIT_ENC_UB_DTB"
-    then
-        fit_enc_opt+=" -K $FIT_ENC_UB_DTB"
-    fi
-    fit_algo=$'signature {\n                algo = \"sha1,rsa2048\";\n                key-name-hint = \"'"$key_hint"$'\";\n};'
-fi
-
-# the cd is needed so that the relative paths will match once we use
-# tftp or move the files to a partition
-cd "$uboot_dir"
-
-if test "$FIT"
-then
-    if ! test "$FDTEDIT"
-    then
-        FDTEDIT="${DEVICE_TREE%.dtb}-fit.dtb"
-    fi
-    its_file="${FIT%.fit}.its"
-    rm -f "$its_file"
-fi
-
-if test $FDTEDIT
-then
-    rm -f "$FDTEDIT"
-    cp "$DEVICE_TREE" "$FDTEDIT"
-
-    if test "$NUM_DT_OVERLAY" && test "$NUM_DT_OVERLAY" -gt 0
-    then
-        i=0
-        while test $i -lt "$NUM_DT_OVERLAY"
-        do
-            if [ ! -f "${DT_OVERLAY[$i]}" ]
+            if test -z "${DOMU_NOBOOT[$i]}"
             then
-                echo "Can not find ${DT_OVERLAY[$i]}, exiting"
-                cleanup_and_return_err
-            fi
-            fdtoverlay -i "$FDTEDIT" -o "$FDTEDIT" "${DT_OVERLAY[$i]}"
-            if test "$?" -ne "0"
-            then
-                echo "Can add overlay ${DT_OVERLAY[$i]} to $FDTEDIT, exiting"
-                cleanup_and_return_err
+                echo "Skipping DomU[$i]: cannot handle non-ramdisk rootfs for dom0less VMs."
             fi
             i=$(( $i + 1 ))
-        done
-        NUM_DT_OVERLAY=0
-    fi
-fi
-
-rm -f $UBOOT_SOURCE $UBOOT_SCRIPT
-
-if test "$FIT"
-then
-    echo 'fit_addr=$fileaddr' >>  $UBOOT_SOURCE
-fi
-
-memaddr=$(( $MEMORY_START + $offset ))
-# 12582912 is 0xc00000, 12MB
-if test $memaddr -lt 12582912
-then
-    memaddr="12582912"
-fi
-memaddr=`printf "0x%X\n" $memaddr`
-uboot_addr=$memaddr
-# 2MB are enough for a uboot script
-memaddr=$(( $memaddr + $offset ))
-memaddr=`printf "0x%X\n" $memaddr`
-
-check_compressed_file_type $XEN "executable"
-xen_addr=$memaddr
-load_file "$XEN" "host_xen"
-
-check_compressed_file_type $DOM0_KERNEL "executable"
-dom0_kernel_addr=$memaddr
-load_file $DOM0_KERNEL "dom0_linux"
-dom0_kernel_size=$filesize
-
-if test "$DOM0_RAMDISK"
-then
-    check_compressed_file_type $DOM0_RAMDISK "cpio archive"
-    dom0_ramdisk_addr=$memaddr
-    load_file "$DOM0_RAMDISK" "dom0_ramdisk"
-    dom0_ramdisk_size=$filesize
-else
-    dom0_ramdisk_addr="-"
-fi
-
-i=0
-while test $i -lt $NUM_DOMUS
-do
-    if test "${DOMU_ROOTFS[$i]}" || test "${DOMU_NOBOOT[$i]}"
-    then
-        if test -z "${DOMU_NOBOOT[$i]}"
-        then
-            echo "Skipping DomU[$i]: cannot handle non-ramdisk rootfs for dom0less VMs."
+            continue
         fi
-        i=$(( $i + 1 ))
-        continue
-    fi
-    check_compressed_file_type ${DOMU_KERNEL[$i]} "executable"
-    domU_kernel_addr[$i]=$memaddr
-    load_file ${DOMU_KERNEL[$i]} "domU${i}_kernel"
-    domU_kernel_size[$i]=$filesize
-    if test "${DOMU_RAMDISK[$i]}"
-    then
-        check_compressed_file_type ${DOMU_RAMDISK[$i]} "cpio archive"
-        domU_ramdisk_addr[$i]=$memaddr
-        load_file ${DOMU_RAMDISK[$i]} "domU${i}_ramdisk"
-        domU_ramdisk_size[$i]=$filesize
-    fi
-    if test "${DOMU_PASSTHROUGH_DTB[$i]}"
-    then
-        check_compressed_file_type ${DOMU_PASSTHROUGH_DTB[$i]} "Device Tree Blob"
-        domU_passthrough_dtb_addr[$i]=$memaddr
-        load_file ${DOMU_PASSTHROUGH_DTB[$i]} "domU${i}_fdt"
-        domU_passthrough_dtb_size[$i]=$filesize
-    fi
-    i=$(( $i + 1 ))
-done
-
-if test $NUM_DT_OVERLAY && test $NUM_DT_OVERLAY -gt 0
-then
-    i=0
-    while test $i -lt $NUM_DT_OVERLAY
-    do
-        if [ ! -f "${DT_OVERLAY[$i]}" ]
+        check_compressed_file_type ${DOMU_KERNEL[$i]} "executable"
+        domU_kernel_addr[$i]=$memaddr
+        load_file ${DOMU_KERNEL[$i]} "domU${i}_kernel"
+        domU_kernel_size[$i]=$filesize
+        if test "${DOMU_RAMDISK[$i]}"
         then
-            echo "Can not find ${DT_OVERLAY[$i]}, exiting"
-            cleanup_and_return_err
+            check_compressed_file_type ${DOMU_RAMDISK[$i]} "cpio archive"
+            domU_ramdisk_addr[$i]=$memaddr
+            load_file ${DOMU_RAMDISK[$i]} "domU${i}_ramdisk"
+            domU_ramdisk_size[$i]=$filesize
         fi
-        check_file_type "${DT_OVERLAY[$i]}" "Device Tree Blob"
-        dt_overlay_addr[$i]=$memaddr
-        load_file "${DT_OVERLAY[$i]}" "host_fdto${i}"
+        if test "${DOMU_PASSTHROUGH_DTB[$i]}"
+        then
+            check_compressed_file_type ${DOMU_PASSTHROUGH_DTB[$i]} "Device Tree Blob"
+            domU_passthrough_dtb_addr[$i]=$memaddr
+            load_file ${DOMU_PASSTHROUGH_DTB[$i]} "domU${i}_fdt"
+            domU_passthrough_dtb_size[$i]=$filesize
+        fi
         i=$(( $i + 1 ))
     done
-fi
+}
 
-check_file_type $DEVICE_TREE "Device Tree Blob"
-device_tree_addr=$memaddr
-load_file $DEVICE_TREE "host_fdt"
-device_tree_editing $device_tree_addr
-
-# disable device tree reloation
-echo "setenv fdt_high 0xffffffffffffffff" >> $UBOOT_SOURCE
-if test "$EFI" && test "$EFI" != "n" && test "$EFI" != "no" && test "$EFI" != "false"
-then
-    echo "bootefi $xen_addr $device_tree_addr" >> $UBOOT_SOURCE
-else
-    echo "booti $xen_addr - $device_tree_addr" >> $UBOOT_SOURCE
-fi
-
-if test "$FIT"
-then
-    # create start along with necessary binaries
+create_its_file()
+{
     load_files="\"dom0_linux\""
-    its_dt="$FDTEDIT"
     cat >> "$its_file" <<- EOF
 /dts-v1/;
 / {
@@ -639,7 +397,7 @@ then
         };
         host_fdt {
             description = "host fdt";
-            data = /incbin/("$its_dt");
+            data = /incbin/("$FDTEDIT");
             type = "flat_dt";
             arch = "arm64";
             compression = "none";
@@ -778,7 +536,261 @@ then
 	EOF
     # end
     echo '};' >> "$its_file"
+}
 
+function check_depends()
+{
+    for ((i=0; i<${#prog_req[@]}; i++))
+    do
+        if ! command -v ${prog_req[i]} > /dev/null
+        then
+            echo "Please install the needed program: ${prog_req[i]}."
+            exit 1
+        fi
+    done
+}
+
+function print_help
+{
+    script=`basename "$0"`
+    echo "usage:"
+    echo "	$script -c CONFIG_FILE -d DIRECTORY [-t LOAD_CMD] [-o FILE] [-k KEY_DIR/HINT [-u U-BOOT_DTB]] [-e] [-f]"
+    echo "	$script -h"
+    echo "where:"
+    echo "	CONFIG_FILE - configuration file"
+    echo "	DIRECTORY - root directory where the files of CONFIG_FILE are located"
+    echo "	LOAD_CMD can be:"
+    echo "		sd - alias for \"load mmc 0:1\" for uboot load commands"
+    echo "		scsi - alias for \"load scsi 0:1\" for uboot load commands"
+    echo "		tftp - alias for \"tftpb\" for uboot load cammnds"
+    echo "		< > - used for uboot load commands"
+    echo "	FILE - output filename for the uboot script and its source, overrides option in CONFIG_FILE"
+    echo "	KEY_DIR - key directory used for signing a fit image"
+    echo "	HINT - the file name of the crt and key file minus the suffix (ex, hint.crt and hint.key)"
+    echo "	U-BOOT_DTB - u-boot control dtb so that the public key gets added to it"
+    echo "	-e - uses efiboot rather than booti"
+    echo "	-f - enable generating a FIT image"
+    echo "	-h - prints out the help message and exits "
+    echo "Defaults:"
+    echo "	CONFIG_FILE=$cfg_file, UBOOT_TYPE=\"LOAD_CMD\" env var, DIRECTORY=$uboot_dir"
+    echo "Example:"
+    echo "	$script -c ../config -d ./build42 -t \"scsi load 1:1\""
+}
+
+while getopts ":c:t:d:ho:k:u:ef" opt; do
+    case ${opt} in
+    t )
+        case $OPTARG in
+        scsi )
+            load_opt="load scsi 0:1"
+            ;;
+        sd )
+            load_opt="load mmc 0:1"
+            ;;
+        tftp )
+            load_opt="tftpb"
+            ;;
+        * )
+            load_opt="$OPTARG"
+            ;;
+        esac
+        ;;
+    c )
+        cfg_file=$OPTARG
+        ;;
+    d )
+        uboot_dir=$OPTARG
+        ;;
+    o )
+        UBOOT_SCRIPT_ARG=$OPTARG
+        ;;
+    k )
+        fits_keyd_opt=$OPTARG
+        ;;
+    u )
+        fits_dtb_opt=$OPTARG
+        ;;
+    e )
+        efi_opt=y
+        ;;
+    f )
+        fit_opt=y
+        ;;
+    h )
+        print_help
+        exit 0
+        ;;
+    * )
+        echo "Unknown option, see \"$0 -h\""
+        exit 1
+        ;;
+    esac
+done
+shift $((OPTIND -1))
+
+if test ! "$cfg_file" -o ! "$uboot_dir"
+then
+    echo "Undefined arguments, see \"$0 -h\""
+    exit 1
+fi
+
+check_depends
+
+source "$cfg_file"
+
+if test "$load_opt"
+then
+    LOAD_CMD="$load_opt"
+fi
+if test ! "$LOAD_CMD"
+then
+    echo "LOAD_CMD not set, either specify it in the config or set it with the -t option"
+    exit 1
+fi
+
+# CLI ARG overrides what's in the config file
+if [ ! -z "$UBOOT_SCRIPT_ARG" ]
+then
+    UBOOT_SCRIPT="$UBOOT_SCRIPT_ARG".scr
+    UBOOT_SOURCE="$UBOOT_SCRIPT_ARG".source
+fi
+
+xen_config
+
+if test "$efi_opt"
+then
+    EFI="y"
+fi
+
+if test "$fit_opt" && ! test "$FIT"
+then
+    FIT="${UBOOT_SOURCE%.source}.fit"
+fi
+
+if test "$fits_keyd_opt"
+then
+    FIT_ENC_KEY_DIR="$fits_keyd_opt"
+fi
+if test "$fits_dtb_opt"
+then
+    FIT_ENC_UB_DTB="$fits_dtb_opt"
+fi
+fit_algo=$'hash {\n                algo = "md5";\n            };'
+if test "$FIT_ENC_KEY_DIR" || test "$FIT_ENC_UB_DTB"
+then
+    if ! test "$FIT_ENC_KEY_DIR" && test "$FIT_ENC_UB_DTB"
+    then
+        echo "if encryption, you need to specify the key directory"
+        exit 1
+    fi
+
+    key_hint="${FIT_ENC_KEY_DIR##*/}"
+    key_dir="${FIT_ENC_KEY_DIR%/*}/"
+
+    fit_enc_opt="-r -k $key_dir"
+    if test "$FIT_ENC_UB_DTB"
+    then
+        fit_enc_opt+=" -K $FIT_ENC_UB_DTB"
+    fi
+    fit_algo=$'signature {\n                algo = \"sha1,rsa2048\";\n                key-name-hint = \"'"$key_hint"$'\";\n};'
+fi
+
+# the cd is needed so that the relative paths will match once we use
+# tftp or move the files to a partition
+cd "$uboot_dir"
+
+if test "$FIT"
+then
+    if ! test "$FDTEDIT"
+    then
+        FDTEDIT="${DEVICE_TREE%.dtb}-fit.dtb"
+    fi
+    its_file="${FIT%.fit}.its"
+    rm -f "$its_file"
+fi
+
+if test $FDTEDIT
+then
+    rm -f "$FDTEDIT"
+    cp "$DEVICE_TREE" "$FDTEDIT"
+
+    if test "$NUM_DT_OVERLAY" && test "$NUM_DT_OVERLAY" -gt 0
+    then
+        i=0
+        while test $i -lt "$NUM_DT_OVERLAY"
+        do
+            if [ ! -f "${DT_OVERLAY[$i]}" ]
+            then
+                echo "Can not find ${DT_OVERLAY[$i]}, exiting"
+                cleanup_and_return_err
+            fi
+            fdtoverlay -i "$FDTEDIT" -o "$FDTEDIT" "${DT_OVERLAY[$i]}"
+            if test "$?" -ne "0"
+            then
+                echo "Can add overlay ${DT_OVERLAY[$i]} to $FDTEDIT, exiting"
+                cleanup_and_return_err
+            fi
+            i=$(( $i + 1 ))
+        done
+        NUM_DT_OVERLAY=0
+    fi
+fi
+
+rm -f $UBOOT_SOURCE $UBOOT_SCRIPT
+
+if test "$FIT"
+then
+    echo 'fit_addr=$fileaddr' >>  $UBOOT_SOURCE
+fi
+
+memaddr=$(( $MEMORY_START + $offset ))
+# 12582912 is 0xc00000, 12MB
+if test $memaddr -lt 12582912
+then
+    memaddr="12582912"
+fi
+memaddr=`printf "0x%X\n" $memaddr`
+uboot_addr=$memaddr
+# 2MB are enough for a uboot script
+memaddr=$(( $memaddr + $offset ))
+memaddr=`printf "0x%X\n" $memaddr`
+
+xen_file_loading
+
+if test $NUM_DT_OVERLAY && test $NUM_DT_OVERLAY -gt 0
+then
+    i=0
+    while test $i -lt $NUM_DT_OVERLAY
+    do
+        if [ ! -f "${DT_OVERLAY[$i]}" ]
+        then
+            echo "Can not find ${DT_OVERLAY[$i]}, exiting"
+            cleanup_and_return_err
+        fi
+        check_file_type "${DT_OVERLAY[$i]}" "Device Tree Blob"
+        dt_overlay_addr[$i]=$memaddr
+        load_file "${DT_OVERLAY[$i]}" "host_fdto${i}"
+        i=$(( $i + 1 ))
+    done
+fi
+
+check_file_type $DEVICE_TREE "Device Tree Blob"
+device_tree_addr=$memaddr
+load_file $DEVICE_TREE "host_fdt"
+device_tree_editing $device_tree_addr
+
+# disable device tree reloation
+echo "setenv fdt_high 0xffffffffffffffff" >> $UBOOT_SOURCE
+if test "$EFI" && test "$EFI" != "n" && test "$EFI" != "no" && test "$EFI" != "false"
+then
+    echo "bootefi $xen_addr $device_tree_addr" >> $UBOOT_SOURCE
+else
+    echo "booti $xen_addr - $device_tree_addr" >> $UBOOT_SOURCE
+fi
+
+if test "$FIT"
+then
+    create_its_file
     mkimage -q -f "$its_file" $fit_enc_opt "$FIT"
 else
     mkimage -A arm64 -T script -C none -a $uboot_addr -e $uboot_addr -d $UBOOT_SOURCE "$UBOOT_SCRIPT" &> /dev/null
