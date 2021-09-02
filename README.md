@@ -55,6 +55,7 @@ BOOT_AUX_FILE[1]="uboot.cfg"
 UBOOT_SOURCE="boot.source"
 UBOOT_SCRIPT="boot.scr"
 FDTEDIT="imagebuilder.dtb"
+FIT="boot.fit"
 ```
 
 Where:
@@ -116,7 +117,10 @@ Where:
   parameter
 
 - FDTEDIT is an optional and is off by default.  Specifies the output
-  modifited dtb, used for reference and fdt_std.
+  modified dtb, used for reference and fdt_std.
+
+- FIT is an optional and is off by default.  Specifies using a fit image
+  for booting rather than individual files.
 
 Then you can invoke uboot-script-gen as follows:
 

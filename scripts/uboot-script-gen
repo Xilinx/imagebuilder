@@ -25,7 +25,7 @@ function dt_mknode()
     local path=$1
     local addr=$2
 
-    if test $UBOOT_SOURCE
+    if test "$UBOOT_SOURCE" && test ! "$FIT"
     then
         echo "fdt mknod $path $addr" >> $UBOOT_SOURCE
     fi
@@ -44,7 +44,7 @@ function dt_set()
     local data=$4
 
 
-    if test $UBOOT_SOURCE
+    if test "$UBOOT_SOURCE" && test ! "$FIT"
     then
         var=${var/\#/\\#}
         if test $data_type = "hex" || test $data_type = "int"
@@ -194,9 +194,9 @@ function load_file()
 
     local relative_path="$(realpath --relative-to=$PWD $filename)"
 
-    if test "$LOAD_CMD" = "imxtract"
+    if test "$FIT"
     then
-        echo "$LOAD_CMD \$fit_addr $fit_scr_name $memaddr" >> $UBOOT_SOURCE
+        echo "imxtract \$fit_addr $fit_scr_name $memaddr" >> $UBOOT_SOURCE
     else
         echo "$LOAD_CMD $memaddr $relative_path" >> $UBOOT_SOURCE
     fi
@@ -280,8 +280,6 @@ function print_help
     echo "		sd - alias for \"load mmc 0:1\" for uboot load commands"
     echo "		scsi - alias for \"load scsi 0:1\" for uboot load commands"
     echo "		tftp - alias for \"tftpb\" for uboot load cammnds"
-    echo "		fit - creates a fit image with a boot script"
-    echo "		fit_std - used for creating a standard fit image, not compatable with dom0less (not recommended)"
     echo "		< > - used for uboot load commands"
     echo "	DIRECTORY - root directory where the files of CONFIG_FILE are located"
     echo "	FILE - output filename for the uboot script and its source, overrides option in CONFIG_FILE"
@@ -289,6 +287,7 @@ function print_help
     echo "	HINT - the file name of the crt and key file minus the suffix (ex, hint.crt and hint.key)"
     echo "	U-BOOT_DTB - u-boot control dtb so that the public key gets added to it"
     echo "	-e - uses efiboot rather than booti"
+    echo "	-f - enable generating a FIT image"
     echo "	-h - prints out the help message and exits "
     echo "Defaults:"
     echo "	CONFIG_FILE=$cfg_file, UBOOT_TYPE=\"LOAD_CMD\" env var, DIRECTORY=$uboot_dir"
@@ -296,7 +295,7 @@ function print_help
     echo "	$script -c ../config -d ./build42 -t \"scsi load 1:1\""
 }
 
-while getopts ":c:t:d:ho:k:u:e" opt; do
+while getopts ":c:t:d:ho:k:u:ef" opt; do
     case ${opt} in
     t )
         case $OPTARG in
@@ -308,12 +307,6 @@ while getopts ":c:t:d:ho:k:u:e" opt; do
             ;;
         tftp )
             LOAD_CMD="tftpb"
-            ;;
-        fit )
-            LOAD_CMD="imxtract"
-            ;;
-        fit_std )
-            LOAD_CMD="fit_std"
             ;;
         * )
             LOAD_CMD="$OPTARG"
@@ -337,6 +330,9 @@ while getopts ":c:t:d:ho:k:u:e" opt; do
         ;;
     e )
         efi=y
+        ;;
+    f )
+        fit_opt=y
         ;;
     h )
         print_help
@@ -428,6 +424,11 @@ do
     i=$(( $i + 1 ))
 done
 
+if test "$fit_opt" && ! test "$FIT"
+then
+    FIT="${UBOOT_SOURCE%.source}.fit"
+fi
+
 fit_algo=$'hash {\n                algo = "md5";\n            };'
 if test "$FIT_ENC_KEY_DIR" || test "$FIT_ENC_UB_DTB"
 then
@@ -452,28 +453,46 @@ fi
 # tftp or move the files to a partition
 cd "$uboot_dir"
 
-if test "$LOAD_CMD" = "fit_std" || test "$LOAD_CMD" = "imxtract"
+if test "$FIT"
 then
-     if ! test $FDTEDIT && test "$LOAD_CMD" = "fit_std"
-     then
-         FDTEDIT=${DEVICE_TREE%.dtb}
-         FDTEDIT+=-fit.dtb
-     fi
-     fit=${UBOOT_SOURCE%.source}
-     its_file=$fit.its
-     fit+=.fit
-     rm -f "$its_file"
+    if ! test "$FDTEDIT"
+    then
+        FDTEDIT="${DEVICE_TREE%.dtb}-fit.dtb"
+    fi
+    its_file="${FIT%.fit}.its"
+    rm -f "$its_file"
 fi
 
 if test $FDTEDIT
 then
-     rm -f $FDTEDIT
-     cp $DEVICE_TREE $FDTEDIT
+    rm -f "$FDTEDIT"
+    cp "$DEVICE_TREE" "$FDTEDIT"
+
+    if test "$NUM_DT_OVERLAY" && test "$NUM_DT_OVERLAY" -gt 0
+    then
+        i=0
+        while test $i -lt "$NUM_DT_OVERLAY"
+        do
+            if [ ! -f "${DT_OVERLAY[$i]}" ]
+            then
+                echo "Can not find ${DT_OVERLAY[$i]}, exiting"
+                cleanup_and_return_err
+            fi
+            fdtoverlay -i "$FDTEDIT" -o "$FDTEDIT" "${DT_OVERLAY[$i]}"
+            if test "$?" -ne "0"
+            then
+                echo "Can add overlay ${DT_OVERLAY[$i]} to $FDTEDIT, exiting"
+                cleanup_and_return_err
+            fi
+            i=$(( $i + 1 ))
+        done
+        NUM_DT_OVERLAY=0
+    fi
 fi
 
 rm -f $UBOOT_SOURCE $UBOOT_SCRIPT
 
-if test "$LOAD_CMD" = "imxtract"
+if test "$FIT"
 then
     echo 'fit_addr=$fileaddr' >>  $UBOOT_SOURCE
 fi
@@ -573,16 +592,11 @@ else
     echo "booti $xen_addr - $device_tree_addr" >> $UBOOT_SOURCE
 fi
 
-if test "$fit"
+if test "$FIT"
 then
     # create start along with necessary binaries
     load_files="\"dom0_linux\""
-    if test "$LOAD_CMD" = "imxtract"
-    then
-        its_dt="$DEVICE_TREE"
-    else
-        its_dt="$FDTEDIT"
-    fi
+    its_dt="$FDTEDIT"
     cat >> "$its_file" <<- EOF
 /dts-v1/;
 / {
@@ -714,9 +728,7 @@ then
     fi
     fdt_line+=";"
     # script for fit
-    if test "$LOAD_CMD" = "imxtract"
-    then
-        cat >> "$its_file" <<- EOF
+    cat >> "$its_file" <<- EOF
         boot_scr {
             description = "imagebuilder's boot script";
             data = /incbin/("$UBOOT_SOURCE");
@@ -727,7 +739,6 @@ then
             $fit_algo
         };
 	EOF
-    fi
     # end images
     echo '    };' >> "$its_file"
     # config, signing requires a config even if it isn't used
@@ -745,7 +756,7 @@ then
     # end
     echo '};' >> "$its_file"
 
-    mkimage -q -f "$its_file" $fit_enc_opt "$fit"
+    mkimage -q -f "$its_file" $fit_enc_opt "$FIT"
 else
     mkimage -A arm64 -T script -C none -a $uboot_addr -e $uboot_addr -d $UBOOT_SOURCE "$UBOOT_SCRIPT" &> /dev/null
 fi
@@ -754,7 +765,7 @@ remove_tmp_files
 
 fit_addr="$(printf "0x%x" $memaddr)"
 
-if test "$fit"
+if test "$FIT"
 then
     memaddr=$(( $MEMORY_END - 2 * ( $memaddr + $offset ) ))
 else
@@ -766,15 +777,10 @@ then
     cleanup_and_return_err
 fi
 
-if test "$fit"
+if test "$FIT"
 then
-    echo "Generated uboot FIT image  $fit, to be loaded at or after address $fit_addr:"
-    if test "$LOAD_CMD" = "imxtract"
-    then
-        echo "tftpb/load mmc 0:1/etc $fit_addr $fit; source $fit_addr:boot_scr"
-    else
-        echo "tftpb/load mmc 0:1/etc $fit_addr $fit; bootm $fit_addr#config"
-    fi
+    echo "Generated uboot FIT image $FIT, to be loaded at or after address $fit_addr:"
+    echo "$LOAD_CMD $fit_addr $FIT; source $fit_addr:boot_scr"
 else
     echo "Generated uboot script $UBOOT_SCRIPT, to be loaded at address $uboot_addr:"
     echo "$LOAD_CMD $uboot_addr $UBOOT_SCRIPT; source $uboot_addr"
