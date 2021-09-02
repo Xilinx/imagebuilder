@@ -66,35 +66,38 @@ function generate_domU_configs()
 
     while test $i -lt $NUM_DOMUS
     do
-        dest="$DESTDIR/part/disk$j/etc/xen/domU$i.cfg"
-        echo "name=\"domU$i\"" >> $dest
-        echo "memory=${DOMU_MEM[$i]}" >> $dest
-        echo "vcpus=${DOMU_VCPUS[$i]}" >> $dest
-        echo "# mount $first_part /boot" >> $dest
-        echo "kernel=\"/boot/${DOMU_KERNEL[$i]}\"" >> $dest
-        if test "${DOMU_RAMDISK[$i]}"
+        if test "${DOMU_NOBOOT[$i]}"
         then
-            echo "ramdisk=\"/boot/${DOMU_RAMDISK[$i]}\"" >> $dest
-        fi
-
-        if [ -z "${DOMU_CMD[$i]}" ]
-        then
-            DOMU_CMD[$i]="console=hvc0"
-        fi
-        if [[ ! ${DOMU_CMD[$i]} =~ root= ]]
-        then
-            if test -z "${DOMU_ROOTFS[$i]}"
+            dest="$DESTDIR/part/disk$j/etc/xen/domU$i.cfg"
+            echo "name=\"domU$i\"" >> $dest
+            echo "memory=${DOMU_MEM[$i]}" >> $dest
+            echo "vcpus=${DOMU_VCPUS[$i]}" >> $dest
+            echo "# mount $first_part /boot" >> $dest
+            echo "kernel=\"/boot/${DOMU_KERNEL[$i]}\"" >> $dest
+            if test "${DOMU_RAMDISK[$i]}"
             then
-                DOMU_CMD[$i]="${DOMU_CMD[$i]} root=/dev/ram0" >> $dest
-            else
-                DOMU_CMD[$i]="${DOMU_CMD[$i]} root=/dev/xvda" >> $dest
+                echo "ramdisk=\"/boot/${DOMU_RAMDISK[$i]}\"" >> $dest
             fi
-        fi
-        echo "extra=\"${DOMU_CMD[$i]}\"" >> $dest
-        if test "${DOMU_ROOTFS[$i]}"
-        then
-            add_rootfs $n
-            echo "disk=[\"$retval,,xvda\"]" >> $dest
+
+            if [ -z "${DOMU_CMD[$i]}" ]
+            then
+                DOMU_CMD[$i]="console=hvc0"
+            fi
+            if [[ ! ${DOMU_CMD[$i]} =~ root= ]]
+            then
+                if test -z "${DOMU_ROOTFS[$i]}"
+                then
+                    DOMU_CMD[$i]="${DOMU_CMD[$i]} root=/dev/ram0" >> $dest
+                else
+                    DOMU_CMD[$i]="${DOMU_CMD[$i]} root=/dev/xvda" >> $dest
+                fi
+            fi
+            echo "extra=\"${DOMU_CMD[$i]}\"" >> $dest
+            if test "${DOMU_ROOTFS[$i]}"
+            then
+                add_rootfs $n
+                echo "disk=[\"$retval,,xvda\"]" >> $dest
+            fi
         fi
 
         n=$(( $n + 1 ))
