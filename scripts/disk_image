@@ -289,12 +289,18 @@ do
 done
 
 offset=$((2*1024*1024))
-_part1_size=`stat -L --printf="%s" $UBOOT_OUT/$XEN`
-_part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$DOM0_KERNEL` ))
+_part1_size=`stat -L --printf="%s" $UBOOT_OUT/$DOM0_KERNEL`
 _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$DEVICE_TREE` ))
-_part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$UBOOT_SOURCE` ))
 _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$UBOOT_SCRIPT` ))
 
+if test "${UBOOT_SOURCE}"
+then
+    _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$UBOOT_SOURCE` ))
+fi
+if test "${XEN}"
+then
+    _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$XEN` ))
+fi
 if test "$NUM_BOOT_AUX_FILE"  && test "$NUM_BOOT_AUX_FILE" -gt 0
 then
     i=0
@@ -409,12 +415,18 @@ mount -t ext4 /dev/mapper/diskimage1 $DESTDIR/part/disk1
 
 # only copy over files that were counted for the partition size
 cd "$UBOOT_OUT"
-cp --parents "$XEN" "${DESTDIR_ABS}/part/disk1/"
 cp --parents "$DOM0_KERNEL" "${DESTDIR_ABS}/part/disk1/"
 cp --parents "$DEVICE_TREE" "${DESTDIR_ABS}/part/disk1/"
-cp --parents "$UBOOT_SOURCE" "${DESTDIR_ABS}/part/disk1/"
 cp --parents "$UBOOT_SCRIPT" "${DESTDIR_ABS}/part/disk1/"
 
+if test "${UBOOT_SOURCE}"
+then
+    cp --parents "$UBOOT_SOURCE" "${DESTDIR_ABS}/part/disk1/"
+fi
+if test "${XEN}"
+then
+    cp --parents "$XEN" "${DESTDIR_ABS}/part/disk1/"
+fi
 if test "$NUM_BOOT_AUX_FILE" && test "$NUM_BOOT_AUX_FILE" -gt 0
 then
     i=0
