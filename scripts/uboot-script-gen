@@ -272,7 +272,7 @@ function print_help
 {
     script=`basename "$0"`
     echo "usage:"
-    echo "	$script -c CONFIG_FILE -d DIRECTORY [-t LOAD_CMD] [-o FILE] [-k KEY_DIR/HINT [-u U-BOOT_DTB]] [-e]"
+    echo "	$script -c CONFIG_FILE -d DIRECTORY [-t LOAD_CMD] [-o FILE] [-k KEY_DIR/HINT [-u U-BOOT_DTB]] [-e] [-f]"
     echo "	$script -h"
     echo "where:"
     echo "	CONFIG_FILE - configuration file"
@@ -323,10 +323,10 @@ while getopts ":c:t:d:ho:k:u:ef" opt; do
         UBOOT_SCRIPT_ARG=$OPTARG
         ;;
     k )
-        FIT_ENC_KEY_DIR=$OPTARG
+        fits_keyd_opt=$OPTARG
         ;;
     u )
-        FIT_ENC_UB_DTB=$OPTARG
+        fits_dtb_opt=$OPTARG
         ;;
     e )
         efi_opt=y
@@ -444,6 +444,14 @@ then
     FIT="${UBOOT_SOURCE%.source}.fit"
 fi
 
+if test "$fits_keyd_opt"
+then
+    FIT_ENC_KEY_DIR="$fits_keyd_opt"
+fi
+if test "$fits_dtb_opt"
+then
+    FIT_ENC_UB_DTB="$fits_dtb_opt"
+fi
 fit_algo=$'hash {\n                algo = "md5";\n            };'
 if test "$FIT_ENC_KEY_DIR" || test "$FIT_ENC_UB_DTB"
 then

@@ -58,6 +58,8 @@ UBOOT_SOURCE="boot.source"
 UBOOT_SCRIPT="boot.scr"
 FDTEDIT="imagebuilder.dtb"
 FIT="boot.fit"
+FIT_ENC_KEY_DIR="dir/key"
+FIT_ENC_UB_DTB="uboot.dtb"
 ```
 
 Where:
@@ -132,6 +134,14 @@ Where:
 
 - FIT is an optional and is off by default.  Specifies using a fit image
   for booting rather than individual files.
+
+- FIT_ENC_KEY_DIR is optional but specifies the directory and hint used
+  for signing a FIT image.  The CLI arguments overwrite what's in the
+  config.  See the -u option below for more information.
+
+- FIT_ENC_UB_DTB is optional but specifies the u-boot dtb to modify and
+  include the public key in.  This can only be used with
+  FIT_ENC_KEY_DIR.  See the -u option below for more information.
 
 Then you can invoke uboot-script-gen as follows:
 
