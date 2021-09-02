@@ -297,6 +297,15 @@ if test "${DOM0_RAMDISK}"
 then
     _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/${DOM0_RAMDISK}` ))
 fi
+if test "$NUM_DT_OVERLAY" && test "$NUM_DT_OVERLAY" -gt 0
+then
+    i=0
+    while test $i -lt "$NUM_DT_OVERLAY"
+    do
+        _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/${DT_OVERLAY[$i]}` ))
+        i=$(( $i + 1 ))
+    done
+fi
 if test "${UBOOT_SOURCE}"
 then
     _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$UBOOT_SOURCE` ))
@@ -427,7 +436,15 @@ if test "${DOM0_RAMDISK}"
 then
     cp --parents "$DOM0_RAMDISK" "${DESTDIR_ABS}/part/disk1/"
 fi
-
+if test "$NUM_DT_OVERLAY" && test "$NUM_DT_OVERLAY" -gt 0
+then
+    i=0
+    while test $i -lt "$NUM_DT_OVERLAY"
+    do
+        cp --parents "${DT_OVERLAY[$i]}" "${DESTDIR_ABS}/part/disk1/"
+        i=$(( $i + 1 ))
+    done
+fi
 if test "${UBOOT_SOURCE}"
 then
     cp --parents "$UBOOT_SOURCE" "${DESTDIR_ABS}/part/disk1/"
