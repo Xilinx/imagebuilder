@@ -35,6 +35,7 @@ function dt_mknode()
 #   int
 #   hex
 #   str
+#   str_a
 function dt_set()
 {
     local path=$1
@@ -45,11 +46,20 @@ function dt_set()
 
     if test $UBOOT_SOURCE
     then
+        var=${var/\#/\\#}
         if test $data_type = "hex" || test $data_type = "int"
         then
             echo "fdt set $path $var <$data>" >> $UBOOT_SOURCE
+        elif test $data_type = "str_a"
+        then
+            array=""
+            for element in $data
+            do
+                array+=" \"$element\""
+            done
+            echo "fdt set $path $var $array" >> $UBOOT_SOURCE
         else
-            echo "fdt set $path $var $data" >> $UBOOT_SOURCE
+            echo "fdt set $path $var \"$data\"" >> $UBOOT_SOURCE
         fi
     fi
 
@@ -61,8 +71,11 @@ function dt_set()
         elif test $data_type = "int"
         then
             fdtput $FDTEDIT -p -t i $path $var $data
-        else
+        elif test $data_type = "str_a"
+        then
             fdtput $FDTEDIT -p -t s $path $var $data
+        else
+            fdtput $FDTEDIT -p -t s $path $var "$data"
         fi
     fi
 }
@@ -74,9 +87,9 @@ function add_device_tree_kernel()
     local size=$3
 
     dt_mknode "$path" "module$addr"
-    dt_set "$path/module$addr" "compatible" "str" "\"multiboot,kernel\" \"multiboot,module\""
+    dt_set "$path/module$addr" "compatible" "str_a" "multiboot,kernel multiboot,module"
     dt_set "$path/module$addr" "reg" "hex"  "0x0 $addr 0x0 $(printf "0x%x" $size)"
-    dt_set "$path/module$addr" "bootargs" "str" "\"console=ttyAMA0\""
+    dt_set "$path/module$addr" "bootargs" "str" "console=ttyAMA0"
 }
 
 
@@ -87,7 +100,7 @@ function add_device_tree_ramdisk()
     local size=$3
 
     dt_mknode "$path"  "module$addr"
-    dt_set "$path/module$addr" "compatible" "str" "\"multiboot,ramdisk\" \"multiboot,module\""
+    dt_set "$path/module$addr" "compatible" "str_a" "multiboot,ramdisk multiboot,module"
     dt_set "$path/module$addr" "reg" "hex"  "0x0 $addr 0x0 $(printf "0x%x" $size)"
 }
 
@@ -99,7 +112,7 @@ function add_device_tree_passthrough()
     local size=$3
 
     dt_mknode "$path"  "module$addr"
-    dt_set "$path/module$addr" "compatible" "str" "\"multiboot,device-tree\" \"multiboot,module\""
+    dt_set "$path/module$addr" "compatible" "str_a" "multiboot,device-tree multiboot,module"
     dt_set "$path/module$addr" "reg" "hex"  "0x0 $addr 0x0 $(printf "0x%x" $size)"
 }
 
@@ -122,17 +135,17 @@ function device_tree_editing()
             done
         fi
     fi
-    dt_set "/chosen" "\#address-cells" "hex" "0x2"
-    dt_set "/chosen" "\#size-cells" "hex" "0x2"
-    dt_set "/chosen" "xen,xen-bootargs" "str" "\"$XEN_CMD\""
+    dt_set "/chosen" "#address-cells" "hex" "0x2"
+    dt_set "/chosen" "#size-cells" "hex" "0x2"
+    dt_set "/chosen" "xen,xen-bootargs" "str" "$XEN_CMD"
     dt_mknode "/chosen" "dom0"
-    dt_set "/chosen/dom0" "compatible" "str" "\"xen,linux-zimage\" \"xen,multiboot-module\" \"multiboot,module\""
+    dt_set "/chosen/dom0" "compatible" "str_a" "xen,linux-zimage xen,multiboot-module multiboot,module"
     dt_set "/chosen/dom0" "reg" "hex" "0x0 $dom0_kernel_addr 0x0 $(printf "0x%x" $dom0_kernel_size)"
-    dt_set "/chosen" "xen,dom0-bootargs" "str" "\"$DOM0_CMD\""
+    dt_set "/chosen" "xen,dom0-bootargs" "str" "$DOM0_CMD"
     if test "$DOM0_RAMDISK" && test $dom0_ramdisk_addr != "-"
     then
         dt_mknode "/chosen" "dom0-ramdisk"
-        dt_set "/chosen/dom0-ramdisk" "compatible" "str" "\"xen,linux-initrd\" \"xen,multiboot-module\" \"multiboot,module\""
+        dt_set "/chosen/dom0-ramdisk" "compatible" "str_a" "xen,linux-initrd xen,multiboot-module multiboot,module"
         dt_set "/chosen/dom0-ramdisk" "reg" "hex" "0x0 $dom0_ramdisk_addr 0x0 $(printf "0x%x" $dom0_ramdisk_size)"
     fi
 
@@ -145,9 +158,9 @@ function device_tree_editing()
             continue
         fi
         dt_mknode "/chosen" "domU$i"
-        dt_set "/chosen/domU$i" "compatible" "str" "\"xen,domain\""
-        dt_set "/chosen/domU$i" "\#address-cells" "hex" "0x2"
-        dt_set "/chosen/domU$i" "\#size-cells" "hex" "0x2"
+        dt_set "/chosen/domU$i" "compatible" "str" "xen,domain"
+        dt_set "/chosen/domU$i" "#address-cells" "hex" "0x2"
+        dt_set "/chosen/domU$i" "#size-cells" "hex" "0x2"
         dt_set "/chosen/domU$i" "memory" "int" "0 ${DOMU_MEM[$i]}"
         dt_set "/chosen/domU$i" "cpus" "int" "${DOMU_VCPUS[$i]}"
         dt_set "/chosen/domU$i" "vpl011" "hex" "0x1"
