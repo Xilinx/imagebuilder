@@ -28,6 +28,7 @@ To use it, first write a config file like `config`:
 ```
 MEMORY_START="0x0"
 MEMORY_END="0x80000000"
+EFI=y
 
 DEVICE_TREE="mpsoc.dtb"
 XEN="xen"
@@ -60,6 +61,10 @@ FIT="boot.fit"
 
 Where:
 - MEMORY_START and MEMORY_END specify the start and end of RAM.
+
+- EFI specifies if the bootefi boot command should be used over booti.
+  If set to anything other than "n", "no", or "false" it will enable
+  bootefi.
 
 - DEVICE_TREE specifies the DTB file to load.
 

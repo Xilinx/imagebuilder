@@ -329,7 +329,7 @@ while getopts ":c:t:d:ho:k:u:ef" opt; do
         FIT_ENC_UB_DTB=$OPTARG
         ;;
     e )
-        efi=y
+        efi_opt=y
         ;;
     f )
         fit_opt=y
@@ -423,6 +423,11 @@ do
     fi
     i=$(( $i + 1 ))
 done
+
+if test "$efi_opt"
+then
+    EFI="y"
+fi
 
 if test "$fit_opt" && ! test "$FIT"
 then
@@ -585,7 +590,7 @@ device_tree_editing $device_tree_addr
 
 # disable device tree reloation
 echo "setenv fdt_high 0xffffffffffffffff" >> $UBOOT_SOURCE
-if test "$efi" && test "$efi" = "y"
+if test "$EFI" && test "$EFI" != "n" && test "$EFI" != "no" && test "$EFI" != "false"
 then
     echo "bootefi $xen_addr $device_tree_addr" >> $UBOOT_SOURCE
 else
