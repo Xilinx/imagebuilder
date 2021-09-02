@@ -48,6 +48,10 @@ DOMU_RAMDISK[1]="zynqmp-dom2/domU-ramdisk.cpio"
 DOMU_MEM[1]=512
 DOMU_VCPUS[1]=1
 
+NUM_BOOT_AUX_FILE=2
+BOOT_AUX_FILE[0]="BOOT.BIN"
+BOOT_AUX_FILE[1]="uboot.cfg"
+
 UBOOT_SOURCE="boot.source"
 UBOOT_SCRIPT="boot.scr"
 FDTEDIT="imagebuilder.dtb"
@@ -99,6 +103,13 @@ Where:
 - DOMU_NOBOOT[number]: if specified, the DomU is not started
   automatically at boot as dom0-less guest. It can still be created
   later from Dom0.
+
+- NUM_BOOT_AUX_FILE: is optional but if specified tell how many extra
+  files to include in the first partition with disk_image.   Useful for
+  things like uboot config files, firmware files or other such files.
+
+- BOOT_AUX_FILE[number]: a list of file(s) to be included in the first
+  partition.
 
 - UBOOT_SOURCE and UBOOT_SCRIPT specify the output. They are optional
   as you can pass -o FILENAME to uboot-script-gen as a command line

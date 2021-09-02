@@ -291,6 +291,21 @@ _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$DOM0_KERNEL` )
 _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$DEVICE_TREE` ))
 _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$UBOOT_SOURCE` ))
 _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$UBOOT_SCRIPT` ))
+
+if test "$NUM_BOOT_AUX_FILE"  && test "$NUM_BOOT_AUX_FILE" -gt 0
+then
+    i=0
+    while test $i -lt "$NUM_BOOT_AUX_FILE"
+    do
+        if [ ! -f "$UBOOT_OUT/${BOOT_AUX_FILE[$i]}" ]
+        then
+            echo "Can not find ${BOOT_AUX_FILE[$i]}, exiting"
+        fi
+        _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/${BOOT_AUX_FILE[$i]}` ))
+        i=$(( $i + 1 ))
+    done
+fi
+
 i=0
 while test $i -lt $NUM_DOMUS
 do
@@ -396,6 +411,17 @@ cp --parents "$DOM0_KERNEL" "${DESTDIR_ABS}/part/disk1/"
 cp --parents "$DEVICE_TREE" "${DESTDIR_ABS}/part/disk1/"
 cp --parents "$UBOOT_SOURCE" "${DESTDIR_ABS}/part/disk1/"
 cp --parents "$UBOOT_SCRIPT" "${DESTDIR_ABS}/part/disk1/"
+
+if test "$NUM_BOOT_AUX_FILE" && test "$NUM_BOOT_AUX_FILE" -gt 0
+then
+    i=0
+    while test $i -lt "$NUM_BOOT_AUX_FILE"
+    do
+        cp --parents "${BOOT_AUX_FILE[$i]}" "${DESTDIR_ABS}/part/disk1/"
+        i=$(( $i + 1 ))
+    done
+fi
+
 i=0
 while test $i -lt $NUM_DOMUS
 do
