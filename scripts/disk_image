@@ -293,6 +293,10 @@ _part1_size=`stat -L --printf="%s" $UBOOT_OUT/$DOM0_KERNEL`
 _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$DEVICE_TREE` ))
 _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$UBOOT_SCRIPT` ))
 
+if test "${DOM0_RAMDISK}"
+then
+    _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/${DOM0_RAMDISK}` ))
+fi
 if test "${UBOOT_SOURCE}"
 then
     _part1_size=$(( $_part1_size + `stat -L --printf="%s" $UBOOT_OUT/$UBOOT_SOURCE` ))
@@ -418,6 +422,11 @@ cd "$UBOOT_OUT"
 cp --parents "$DOM0_KERNEL" "${DESTDIR_ABS}/part/disk1/"
 cp --parents "$DEVICE_TREE" "${DESTDIR_ABS}/part/disk1/"
 cp --parents "$UBOOT_SCRIPT" "${DESTDIR_ABS}/part/disk1/"
+
+if test "${DOM0_RAMDISK}"
+then
+    cp --parents "$DOM0_RAMDISK" "${DESTDIR_ABS}/part/disk1/"
+fi
 
 if test "${UBOOT_SOURCE}"
 then
