@@ -446,6 +446,22 @@ linux_file_loading()
     fi
 }
 
+bitstream_load_and_config()
+{
+    if test "$BITSTREAM"
+    then
+        check_file_type "$BITSTREAM" "BIT data"
+        bitstream_addr=$memaddr
+        load_file $BITSTREAM "fpga_bitstream"
+        bitstream_size=$filesize
+        if test "$UBOOT_SOURCE"
+        then
+            # we assume the FPGA device is 0 here
+            echo "fpga load 0 $bitstream_addr $bitstream_size" >> "$UBOOT_SOURCE"
+        fi
+    fi
+}
+
 create_its_file_xen()
 {
     if test "$ramdisk_addr" != "-"
@@ -608,6 +624,23 @@ create_its_file()
         fdt_line+=";"
     fi
 
+    if test "$BITSTREAM"
+    then
+        local fpga_line="fpga = \"fpga_bitstream\";"
+        cat >> "$its_file" <<- EOF
+        fpga_bitstream {
+            description = "FPGA bit stream";
+            data = /incbin/("$BITSTREAM");
+            type = "fpga";
+            arch = "arm64";
+            compression = "none";
+            compatible = "u-boot,fpga-legacy";
+            load = <$bitstream_addr>;
+            $fit_algo
+        };
+	EOF
+    fi
+
     # script for fit
     cat >> "$its_file" <<- EOF
         boot_scr {
@@ -640,6 +673,7 @@ create_its_file()
             kernel = "host_kernel";
             $fdt_line
             $ramdisk_line
+            $fpga_line
             $loadables_line
         };
     };
@@ -903,6 +937,7 @@ fi
 check_file_type $DEVICE_TREE "Device Tree Blob"
 device_tree_addr=$memaddr
 load_file $DEVICE_TREE "host_fdt"
+bitstream_load_and_config  # bitstream is loaded last but used first
 device_tree_editing $device_tree_addr
 
 # disable device tree reloation

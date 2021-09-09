@@ -50,6 +50,8 @@ DOMU_RAMDISK[1]="zynqmp-dom2/domU-ramdisk.cpio"
 DOMU_MEM[1]=512
 DOMU_VCPUS[1]=1
 
+BITSTREAM=download.bit
+
 NUM_BOOT_AUX_FILE=2
 BOOT_AUX_FILE[0]="BOOT.BIN"
 BOOT_AUX_FILE[1]="uboot.cfg"
@@ -126,6 +128,10 @@ Where:
 
 - LINUX_RAMDISK is optional but specifies the ramdisk to use when
    booting baremetal Linux.
+
+- BITSTREAM is optional but specifies the bitstream to program the FPGA
+  with in u-boot when booting.  Currently only a single bitstream is
+  supported.
 
 - NUM_BOOT_AUX_FILE: is optional but if specified tell how many extra
   files to include in the first partition with disk_image.   Useful for
