@@ -118,6 +118,15 @@ Where:
   automatically at boot as dom0-less guest. It can still be created
   later from Dom0.
 
+- LINUX is optional but specifies the Linux kernel for when Xen is NOT
+  used.  To enable this set any LINUX\_\* variables and do NOT set the
+  XEN variable.
+
+- LINUX_CMD is optional but specifies the baremetal Linux kernel CMD.
+
+- LINUX_RAMDISK is optional but specifies the ramdisk to use when
+   booting baremetal Linux.
+
 - NUM_BOOT_AUX_FILE: is optional but if specified tell how many extra
   files to include in the first partition with disk_image.   Useful for
   things like uboot config files, firmware files or other such files.

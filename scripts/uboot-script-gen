@@ -116,25 +116,8 @@ function add_device_tree_passthrough()
     dt_set "$path/module$addr" "reg" "hex"  "0x0 $addr 0x0 $(printf "0x%x" $size)"
 }
 
-function device_tree_editing()
+function xen_device_tree_editing()
 {
-    local device_tree_addr=$1
-
-    if test $UBOOT_SOURCE
-    then
-        echo "fdt addr $device_tree_addr" >> $UBOOT_SOURCE
-        echo "fdt resize 1024" >> $UBOOT_SOURCE
-
-        if test $NUM_DT_OVERLAY && test $NUM_DT_OVERLAY -gt 0
-        then
-            i=0
-            while test $i -lt $NUM_DT_OVERLAY
-            do
-                echo "fdt apply ${dt_overlay_addr[$i]}" >> $UBOOT_SOURCE
-                i=$(( $i + 1 ))
-            done
-        fi
-    fi
     dt_set "/chosen" "#address-cells" "hex" "0x2"
     dt_set "/chosen" "#size-cells" "hex" "0x2"
     dt_set "/chosen" "xen,xen-bootargs" "str" "$XEN_CMD"
@@ -142,11 +125,11 @@ function device_tree_editing()
     dt_set "/chosen/dom0" "compatible" "str_a" "xen,linux-zimage xen,multiboot-module multiboot,module"
     dt_set "/chosen/dom0" "reg" "hex" "0x0 $dom0_kernel_addr 0x0 $(printf "0x%x" $dom0_kernel_size)"
     dt_set "/chosen" "xen,dom0-bootargs" "str" "$DOM0_CMD"
-    if test "$DOM0_RAMDISK" && test $dom0_ramdisk_addr != "-"
+    if test "$DOM0_RAMDISK" && test $ramdisk_addr != "-"
     then
         dt_mknode "/chosen" "dom0-ramdisk"
         dt_set "/chosen/dom0-ramdisk" "compatible" "str_a" "xen,linux-initrd xen,multiboot-module multiboot,module"
-        dt_set "/chosen/dom0-ramdisk" "reg" "hex" "0x0 $dom0_ramdisk_addr 0x0 $(printf "0x%x" $dom0_ramdisk_size)"
+        dt_set "/chosen/dom0-ramdisk" "reg" "hex" "0x0 $ramdisk_addr 0x0 $(printf "0x%x" $ramdisk_size)"
     fi
 
     i=0
@@ -175,6 +158,45 @@ function device_tree_editing()
         fi
         i=$(( $i + 1 ))
     done
+}
+
+function linux_device_tree_editing()
+{
+    dt_set "/chosen" "bootargs" "str" "$LINUX_CMD"
+    if test "$LINUX_RAMDISK"
+    then
+        local ramdisk_addr_end="$( printf "0x%x" $(( ramdisk_addr + ramdisk_size )) )"
+        dt_set "/chosen" "linux,initrd-start" "hex" "$ramdisk_addr"
+        dt_set "/chosen" "linux,initrd-end" "hex" "$ramdisk_addr_end"
+    fi
+}
+
+function device_tree_editing()
+{
+    local device_tree_addr=$1
+
+    if test $UBOOT_SOURCE
+    then
+        echo "fdt addr $device_tree_addr" >> $UBOOT_SOURCE
+        echo "fdt resize 1024" >> $UBOOT_SOURCE
+
+        if test $NUM_DT_OVERLAY && test $NUM_DT_OVERLAY -gt 0
+        then
+            i=0
+            while test $i -lt $NUM_DT_OVERLAY
+            do
+                echo "fdt apply ${dt_overlay_addr[$i]}" >> $UBOOT_SOURCE
+                i=$(( $i + 1 ))
+            done
+        fi
+    fi
+
+    if test "$os" = "xen"
+    then
+        xen_device_tree_editing
+    else
+        linux_device_tree_editing
+    fi
 }
 
 function add_size()
@@ -256,6 +278,40 @@ function check_compressed_file_type()
     check_file_type $filename "$type"
 }
 
+function find_root_dev()
+{
+
+    local dev=${LOAD_CMD%:*}
+    dev=${dev##* }
+    local par=${LOAD_CMD#*:}
+
+    if [ -z "$dev" ] || [ -z "$par" ]
+    then
+        echo "Could not parse device and partition."
+        echo "Please make sure the load command is correct or manually set {DOM0/LINUX}_CMD in the config file."
+        exit 1
+    fi
+
+    par=$((par + 1))
+
+    if [[ $LOAD_CMD =~ mmc ]]
+    then
+        root_dev="/dev/mmcblk${dev}p${par}"
+    elif [[ $LOAD_CMD =~ scsi ]]
+    then
+        # converts number to a scsi device character
+        dev=$((dev + 97))
+        dev=$(printf %x $dev)
+        dev=$(printf "\x$dev")
+
+        root_dev="/dev/sd${dev}${par}"
+    else
+        echo "Only mmc and scsi are supported for automatically setting the root partition."
+        echo "Manually set {DOM0/LINUX}_CMD with the root device in the config file to bypass this."
+        exit 1
+    fi
+}
+
 function xen_config()
 {
     if [ -z "$XEN_CMD" ]
@@ -273,35 +329,9 @@ function xen_config()
         then
             DOM0_CMD="$DOM0_CMD root=/dev/ram0"
         else
-            DEV=${LOAD_CMD%:*}
-            DEV=${DEV##* }
-            PAR=${LOAD_CMD#*:}
-
-            if [ -z "$DEV" ] || [ -z "$PAR" ]
-            then
-                echo "Could not parse device and partition."
-                echo "Please make sure the load command is correct or manually set DOM0_CMD in the config file."
-                exit 1
-            fi
-
-            PAR=$((PAR + 1))
-
-            if [[ $LOAD_CMD =~ mmc ]]
-            then
-                DOM0_CMD="$DOM0_CMD root=/dev/mmcblk${DEV}p${PAR}"
-            elif [[ $LOAD_CMD =~ scsi ]]
-            then
-                # converts number to a scsi device character
-                DEV=$((DEV + 97))
-                DEV=$(printf %x $DEV)
-                DEV=$(printf "\x$DEV")
-
-                DOM0_CMD="$DOM0_CMD root=/dev/sd${DEV}${PAR}"
-            else
-                echo "Only mmc and scsi are supported for automatically setting the root partition."
-                echo "Manually set DOM0_CMD with the root device in the config file to bypass this."
-                exit 1
-            fi
+            find_root_dev
+            # $root_dev is set by find_root_dev
+            DOM0_CMD="$DOM0_CMD root=$root_dev"
         fi
     fi
     i=0
@@ -320,11 +350,32 @@ function xen_config()
     done
 }
 
+function linux_config()
+{
+    if [ -z "$LINUX_CMD" ]
+    then
+        LINUX_CMD="earlycon console=ttyPS0,115200"
+    fi
+
+    if [[ ! $LINUX_CMD =~ root= ]]
+    then
+        if test -z "$LINUX_ROOTFS"
+        then
+            LINUX_CMD="$LINUX_CMD root=/dev/ram0"
+        else
+            find_root_dev
+            # $root_dev is set by find_root_dev
+            LINUX_CMD="$LINUX_CMD root=$root_dev"
+        fi
+    fi
+}
+
 xen_file_loading()
 {
     check_compressed_file_type $XEN "executable"
-    xen_addr=$memaddr
-    load_file "$XEN" "host_xen"
+    kernel_addr=$memaddr
+    kernel_path=$XEN
+    load_file "$XEN" "host_kernel"
 
     check_compressed_file_type $DOM0_KERNEL "executable"
     dom0_kernel_addr=$memaddr
@@ -334,11 +385,12 @@ xen_file_loading()
     if test "$DOM0_RAMDISK"
     then
         check_compressed_file_type $DOM0_RAMDISK "cpio archive"
-        dom0_ramdisk_addr=$memaddr
+        ramdisk_addr=$memaddr
+        ramdisk_path=$DOM0_RAMDISK
         load_file "$DOM0_RAMDISK" "dom0_ramdisk"
-        dom0_ramdisk_size=$filesize
+        ramdisk_size=$filesize
     else
-        dom0_ramdisk_addr="-"
+        ramdisk_addr="-"
     fi
 
     i=0
@@ -375,35 +427,35 @@ xen_file_loading()
     done
 }
 
-create_its_file()
+linux_file_loading()
 {
-    load_files="\"dom0_linux\""
+    check_compressed_file_type $LINUX "executable"
+    kernel_addr=$memaddr
+    kernel_path=$LINUX
+    load_file "$LINUX" "host_kernel"
+
+    if test "$LINUX_RAMDISK"
+    then
+        check_compressed_file_type $LINUX_RAMDISK "cpio archive"
+        ramdisk_addr=$memaddr
+        ramdisk_path=$LINUX_RAMDISK
+        load_file "$LINUX_RAMDISK" "host_ramdisk"
+        ramdisk_size=$filesize
+    else
+        ramdisk_addr="-"
+    fi
+}
+
+create_its_file_xen()
+{
+    if test "$ramdisk_addr" != "-"
+    then
+        load_files="\"dom0_linux\", \"dom0_ramdisk\""
+    else
+        load_files="\"dom0_linux\""
+    fi
+    # xen below
     cat >> "$its_file" <<- EOF
-/dts-v1/;
-/ {
-    description = "Configuration to load Xen";
-    #address-cells = <1>;
-    images {
-        host_xen {
-            description = "host xen binary";
-            data = /incbin/("$XEN");
-            type = "kernel";
-            arch = "arm64";
-            os = "linux";
-            compression = "none";
-            load = <$xen_addr>;
-            entry = <$xen_addr>;
-            $fit_algo
-        };
-        host_fdt {
-            description = "host fdt";
-            data = /incbin/("$FDTEDIT");
-            type = "flat_dt";
-            arch = "arm64";
-            compression = "none";
-            load = <$device_tree_addr>;
-            $fit_algo
-        };
         dom0_linux {
             description = "dom0 linux kernel binary";
             data = /incbin/("$DOM0_KERNEL");
@@ -415,22 +467,6 @@ create_its_file()
             $fit_algo
         };
 	EOF
-    if test "$DOM0_RAMDISK"
-    then
-        load_files+=", \"dom0_ramdisk\""
-        cat >> "$its_file" <<- EOF
-        dom0_ramdisk {
-            description = "dom0 ramdisk";
-            data = /incbin/("$DOM0_RAMDISK");
-            type = "ramdisk";
-            arch = "arm64";
-            os = "linux";
-            compression = "none";
-            load = <$dom0_ramdisk_addr>;
-            $fit_algo
-        };
-	EOF
-    fi
     # domUs
     i=0
     while test $i -lt $NUM_DOMUS
@@ -486,15 +522,78 @@ create_its_file()
         fi
         i=$(( $i + 1 ))
     done
-    fdt_line="fdt = \"host_fdt\""
+}
+
+create_its_file()
+{
+    fdt_line="fdt = \"host_fdt\";"
+    cat >> "$its_file" <<- EOF
+/dts-v1/;
+/ {
+    description = "Configuration from Imagebuilder to load Xen/Linux";
+    #address-cells = <1>;
+    images {
+        host_fdt {
+            description = "$os fdt";
+            data = /incbin/("$FDTEDIT");
+            type = "flat_dt";
+            arch = "arm64";
+            compression = "none";
+            load = <$device_tree_addr>;
+            $fit_algo
+        };
+	EOF
+
+    cat >> "$its_file" <<- EOF
+        host_kernel {
+            description = "$os kernel";
+            data = /incbin/("$kernel_path");
+            type = "kernel";
+            arch = "arm64";
+            os = "linux";
+            compression = "none";
+            load = <$kernel_addr>;
+            entry = <$kernel_addr>;
+            $fit_algo
+        };
+	EOF
+
+    if test "$ramdisk_addr" != "-"
+    then
+        if test "$os" = "xen"
+        then
+            local rd_name="dom0"
+        else
+            local rd_name="host"
+        fi
+        cat >> "$its_file" <<- EOF
+        ${rd_name}_ramdisk {
+            description = "$rd_name ramdisk";
+            data = /incbin/("$ramdisk_path");
+            type = "ramdisk";
+            arch = "arm64";
+            os = "linux";
+            compression = "none";
+            load = <$ramdisk_addr>;
+            $fit_algo
+        };
+	EOF
+    fi
+
+    if test "$os" = "xen"
+    then
+        create_its_file_xen
+    fi
+
     if test $NUM_DT_OVERLAY && test $NUM_DT_OVERLAY -gt 0
     then
+        fdt_line="fdt = \"host_fdt\""
         i=0
         while test $i -lt $NUM_DT_OVERLAY
         do
             cat >> "$its_file" <<- EOF
         host_fdto${i} {
-            description = "host fdt overlay ${i}";
+            description = "$os fdt overlay ${i}";
             data = /incbin/("${DT_OVERLAY[$i]}");
             type = "flat_dt";
             arch = "arm64";
@@ -506,8 +605,9 @@ create_its_file()
             fdt_line+=", \"host_fdto${i}\""
             i=$(( $i + 1 ))
         done
+        fdt_line+=";"
     fi
-    fdt_line+=";"
+
     # script for fit
     cat >> "$its_file" <<- EOF
         boot_scr {
@@ -522,15 +622,25 @@ create_its_file()
 	EOF
     # end images
     echo '    };' >> "$its_file"
-    # config, signing requires a config even if it isn't used
+
+    # config
+    local ramdisk_line=""
+    if test "$os" = "xen"
+    then
+        local loadables_line="loadables = $load_files;"
+    elif test "$ramdisk_addr" != "-"
+    then
+        local ramdisk_line="ramdisk = \"host_ramdisk\";"
+    fi
     cat >> "$its_file" <<- EOF
     configurations {
         default = "config";
         config {
-            description = "Xen";
-            kernel = "host_xen";
+            description = "Imagebuilder $os";
+            kernel = "host_kernel";
             $fdt_line
-            loadables = $load_files;
+            $ramdisk_line
+            $loadables_line
         };
     };
 	EOF
@@ -655,7 +765,18 @@ then
     UBOOT_SOURCE="$UBOOT_SCRIPT_ARG".source
 fi
 
-xen_config
+if test "$XEN"
+then
+    os="xen"
+    xen_config
+elif test "$LINUX"
+then
+    os="linux"
+    linux_config
+else
+    echo "Neither a Xen or Linux kernel is specified, exiting"
+    exit 1
+fi
 
 if test "$efi_opt"
 then
@@ -755,7 +876,12 @@ uboot_addr=$memaddr
 memaddr=$(( $memaddr + $offset ))
 memaddr=`printf "0x%X\n" $memaddr`
 
-xen_file_loading
+if test "$os" = "xen"
+then
+    xen_file_loading
+else
+    linux_file_loading
+fi
 
 if test $NUM_DT_OVERLAY && test $NUM_DT_OVERLAY -gt 0
 then
@@ -783,9 +909,9 @@ device_tree_editing $device_tree_addr
 echo "setenv fdt_high 0xffffffffffffffff" >> $UBOOT_SOURCE
 if test "$EFI" && test "$EFI" != "n" && test "$EFI" != "no" && test "$EFI" != "false"
 then
-    echo "bootefi $xen_addr $device_tree_addr" >> $UBOOT_SOURCE
+    echo "bootefi $kernel_addr $device_tree_addr" >> $UBOOT_SOURCE
 else
-    echo "booti $xen_addr - $device_tree_addr" >> $UBOOT_SOURCE
+    echo "booti $kernel_addr - $device_tree_addr" >> $UBOOT_SOURCE
 fi
 
 if test "$FIT"
