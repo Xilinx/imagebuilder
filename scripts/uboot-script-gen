@@ -746,7 +746,7 @@ while getopts ":c:t:d:ho:k:u:ef" opt; do
         uboot_dir=$OPTARG
         ;;
     o )
-        UBOOT_SCRIPT_ARG=$OPTARG
+        uboot_out_opt=$OPTARG
         ;;
     k )
         fits_keyd_opt=$OPTARG
@@ -782,21 +782,25 @@ check_depends
 
 source "$cfg_file"
 
-if test "$load_opt"
+# command line overrides
+LOAD_CMD=${load_opt:-$LOAD_CMD}
+EFI=${efi_opt:-$EFI}
+FIT_ENC_KEY_DIR=${fits_keyd_opt:-$FIT_ENC_KEY_DIR}
+FIT_ENC_UB_DTB=${fits_dtb_opt:-$FIT_ENC_UB_DTB}
+if [ ! -z "$uboot_out_opt" ]
 then
-    LOAD_CMD="$load_opt"
+    UBOOT_SCRIPT="$uboot_out_opt".scr
+    UBOOT_SOURCE="$uboot_out_opt".source
 fi
+if test "$fit_opt" && ! test "$FIT"
+then
+    FIT="${UBOOT_SOURCE%.source}.fit"
+fi
+
 if test ! "$LOAD_CMD"
 then
     echo "LOAD_CMD not set, either specify it in the config or set it with the -t option"
     exit 1
-fi
-
-# CLI ARG overrides what's in the config file
-if [ ! -z "$UBOOT_SCRIPT_ARG" ]
-then
-    UBOOT_SCRIPT="$UBOOT_SCRIPT_ARG".scr
-    UBOOT_SOURCE="$UBOOT_SCRIPT_ARG".source
 fi
 
 if test "$XEN"
@@ -812,24 +816,6 @@ else
     exit 1
 fi
 
-if test "$efi_opt"
-then
-    EFI="y"
-fi
-
-if test "$fit_opt" && ! test "$FIT"
-then
-    FIT="${UBOOT_SOURCE%.source}.fit"
-fi
-
-if test "$fits_keyd_opt"
-then
-    FIT_ENC_KEY_DIR="$fits_keyd_opt"
-fi
-if test "$fits_dtb_opt"
-then
-    FIT_ENC_UB_DTB="$fits_dtb_opt"
-fi
 fit_algo=$'hash {\n                algo = "md5";\n            };'
 if test "$FIT_ENC_KEY_DIR" || test "$FIT_ENC_UB_DTB"
 then
