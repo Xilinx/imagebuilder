@@ -372,11 +372,6 @@ function linux_config()
 
 xen_file_loading()
 {
-    check_compressed_file_type $XEN "executable"
-    kernel_addr=$memaddr
-    kernel_path=$XEN
-    load_file "$XEN" "host_kernel"
-
     check_compressed_file_type $DOM0_KERNEL "executable"
     dom0_kernel_addr=$memaddr
     load_file $DOM0_KERNEL "dom0_linux"
@@ -425,6 +420,13 @@ xen_file_loading()
         fi
         i=$(( $i + 1 ))
     done
+
+    # secure boot on uboot expects the last PE image loaded to be the
+    # signed secureboot image used
+    check_compressed_file_type $XEN "executable"
+    kernel_addr=$memaddr
+    kernel_path=$XEN
+    load_file "$XEN" "host_kernel"
 }
 
 linux_file_loading()
