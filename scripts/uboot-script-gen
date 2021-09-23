@@ -477,10 +477,6 @@ uboot_addr=$memaddr
 memaddr=$(( $memaddr + $offset ))
 memaddr=`printf "0x%X\n" $memaddr`
 
-check_compressed_file_type $XEN "executable"
-xen_addr=$memaddr
-load_file "$XEN" "host_xen"
-
 check_compressed_file_type $DOM0_KERNEL "executable"
 dom0_kernel_addr=$memaddr
 load_file $DOM0_KERNEL "dom0_linux"
@@ -545,6 +541,10 @@ then
         i=$(( $i + 1 ))
     done
 fi
+
+check_compressed_file_type $XEN "executable"
+xen_addr=$memaddr
+load_file "$XEN" "host_xen"
 
 check_file_type $DEVICE_TREE "Device Tree Blob"
 device_tree_addr=$memaddr
