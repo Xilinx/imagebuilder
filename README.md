@@ -241,6 +241,8 @@ Where:\
 -w specifies the temporary working directory that the script uses for
    building the disk image, and if not set, one is created in /tmp\
 -o specifies the output disk image file name\
+-a specifies whether the disk image size is to be aligned to the nearest
+   power of two\
 -t specifies the u-boot command to load the binaries. "tftp", "sd" and
    "scsi" are shorthands for "tftpb", "load mmc 0:1" and
    "load scsi 0:1", but actually any arbitrary command can be used, for

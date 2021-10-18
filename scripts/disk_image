@@ -146,6 +146,24 @@ function add_partition()
     _npart=$(( $_npart + 1 ))
 }
 
+function align_size_power_of_two()
+{
+    local _cnt_bits=0
+    local num=$1
+    local _num=$num
+    while [ $_num -ne 0 ]
+    do
+        _num=$((_num >> 1))
+        _cnt_bits=$((_cnt_bits + 1))
+    done
+    _num=$((1<<(_cnt_bits - 1)))
+    if [ $num -gt $_num ]
+    then
+        _num=$((1<<_cnt_bits))
+    fi
+    echo $_num
+}
+
 function write_rootfs()
 {
     local j=$1
@@ -177,7 +195,7 @@ function write_rootfs()
 function print_help
 {
     echo "usage:"
-    echo "	$0 -c CONFIG_FILE -d UBOOT_DIRECTORY -t UBOOT_TYPE <-w WORK_DIRECTORY> <-s SLACK> -o IMG_FILE"
+    echo "	$0 -c CONFIG_FILE -d UBOOT_DIRECTORY -t UBOOT_TYPE <-w WORK_DIRECTORY> <-s SLACK> <-a> -o IMG_FILE"
     echo "	$0 -h"
     echo "where:"
     echo "	-c CONFIG_FILE - configuration file"
@@ -189,6 +207,7 @@ function print_help
     echo "		< > - used for uboot load commands"
     echo "	-w WORK_DIRECTORY - work directory used when building the image"
     echo "	-s SLACK - free MB to add to each partition, default 128"
+    echo "	-a specifies that the size of IMG_FILE has to be aligned to the nearest power of two"
     echo "	-o IMG_FILE - the output img file "
     echo "Example:"
     echo "	$0 -c ../config -d ./build42 -w tmp -o disk.img"
@@ -201,7 +220,7 @@ then
     exit 1
 fi
 
-while getopts ":w:d:c:t:s:o:h" opt
+while getopts ":w:d:c:t:s:o:ah" opt
 do
     case ${opt} in
     t )
@@ -239,6 +258,9 @@ do
         ;;
     o )
         IMG=$OPTARG
+        ;;
+    a )
+        ALIGN=1
         ;;
     h )
         print_help
@@ -376,6 +398,12 @@ do
     i=$(( $i + 1 ))
 done
 _tot_size=$(( $_tot_size + 16 ))
+
+# NOTE: Increase the size of the image to the nearest power of two
+if test "$ALIGN"
+then
+    _tot_size=$(align_size_power_of_two $_tot_size)
+fi
 
 # NOTE: Increase vos_a to 256 to accomodate rootfs
 # 528 MiB (256 + 256 + 16)
