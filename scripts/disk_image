@@ -114,18 +114,21 @@ function add_partition()
 
     cd "$aux_dir"
 
-    if [[ $rootfs = *.cpio.gz ]]
+    if [[ $rootfs = *.cpio ]]
+    then
+        cat "${UBOOT_OUT_ABS}/$rootfs" | cpio -id
+    elif [[ $rootfs = *.cpio.gz ]]
     then
         cat "${UBOOT_OUT_ABS}/$rootfs" | gunzip | cpio -id
-        _part_size=$(du -sb| awk '{print $1}')
     elif [[ $rootfs = *.tar.gz ]]
     then
         tar -xf "${UBOOT_OUT_ABS}/$rootfs"
-        _part_size=$(du -sb| awk '{print $1}')
     else
-        echo "Ignoring $rootfs: unsupported file format. Use cpio.gz or tar.gz."
+        echo "Ignoring $rootfs: unsupported file format. Use cpio or cpio.gz or tar.gz."
+        exit 1
     fi
 
+    _part_size=$(du -sb| awk '{print $1}')
     cd -
     rm -rf "$aux_dir"
 
@@ -176,14 +179,17 @@ function write_rootfs()
     # Extract rootfs cpio archive into `.../part/vos_$j`
     cd ${DESTDIR}/part/disk$j
 
-    if [[ $rootfs = *.cpio.gz ]]
+    if [[ $rootfs = *.cpio ]]
+    then
+        cat "${UBOOT_OUT_ABS}/$rootfs" | cpio -id
+    elif [[ $rootfs = *.cpio.gz ]]
     then
         cat "${UBOOT_OUT_ABS}/$rootfs" | gunzip | cpio -id
     elif [[ $rootfs = *.tar.gz ]]
     then
         tar -xf "${UBOOT_OUT_ABS}/$rootfs"
     else
-        echo "Ignoring $rootfs: unsupported file format. Use cpio.gz or tar.gz."
+        echo "Ignoring $rootfs: unsupported file format. Use cpio or cpio.gz or tar.gz."
     fi
 
     cd -
