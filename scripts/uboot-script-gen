@@ -85,11 +85,16 @@ function add_device_tree_kernel()
     local path=$1
     local addr=$2
     local size=$3
+    local bootargs=$4
 
+    if test -z "$bootargs"
+    then
+        bootargs="console=ttyAMA0"
+    fi
     dt_mknode "$path" "module$addr"
     dt_set "$path/module$addr" "compatible" "str_a" "multiboot,kernel multiboot,module"
     dt_set "$path/module$addr" "reg" "hex"  "0x0 $addr 0x0 $(printf "0x%x" $size)"
-    dt_set "$path/module$addr" "bootargs" "str" "console=ttyAMA0"
+    dt_set "$path/module$addr" "bootargs" "str" "$bootargs"
 }
 
 
@@ -147,7 +152,7 @@ function xen_device_tree_editing()
         dt_set "/chosen/domU$i" "memory" "int" "0 ${DOMU_MEM[$i]}"
         dt_set "/chosen/domU$i" "cpus" "int" "${DOMU_VCPUS[$i]}"
         dt_set "/chosen/domU$i" "vpl011" "hex" "0x1"
-        add_device_tree_kernel "/chosen/domU$i" ${domU_kernel_addr[$i]} ${domU_kernel_size[$i]}
+        add_device_tree_kernel "/chosen/domU$i" ${domU_kernel_addr[$i]} ${domU_kernel_size[$i]} "${DOMU_CMD[$i]}"
         if test "${domU_ramdisk_addr[$i]}"
         then
             add_device_tree_ramdisk "/chosen/domU$i" ${domU_ramdisk_addr[$i]} ${domU_ramdisk_size[$i]}

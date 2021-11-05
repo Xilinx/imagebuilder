@@ -43,9 +43,11 @@ DT_OVERLAY[0]="host_dt_overlay.dtbo"
 
 NUM_DOMUS=2
 DOMU_KERNEL[0]="zynqmp-dom1/Image-domU"
+DOMU_CMD[0]="console=ttyPS0 earlycon console=ttyPS0,115200 clk_ignore_unused rdinit=/sbin/init root=/dev/ram0 init=/bin/sh"
 DOMU_RAMDISK[0]="zynqmp-dom1/domU-ramdisk.cpio"
 DOMU_PASSTHROUGH_DTB[0]="zynqmp-dom1/passthrough-example-part.dtb"
 DOMU_KERNEL[1]="zynqmp-dom2/Image-domU"
+DOMU_CMD[1]="console=ttyAMA0 clk_ignore_unused rdinit=/sbin/init root=/dev/ram0 init=/bin/sh"
 DOMU_RAMDISK[1]="zynqmp-dom2/domU-ramdisk.cpio"
 DOMU_MEM[1]=512
 DOMU_VCPUS[1]=1
@@ -103,9 +105,8 @@ Where:
 
 - DOMU_KERNEL[number] specifies the DomU kernel to use.
 
-- DOMU_CMD[number] specifies the command line arguments for Dom0's Linux
-  kernel.  If "root=" isn't set, imagebuilder will try to determine it.
-  If not set at all, the default one is used.
+- DOMU_CMD[number] specifies the command line arguments for DomU's Linux
+  kernel. If not set, then "console=ttyAMA0" is used.
 
 - DOMU_RAMDISK[number] specifies the DomU ramdisk to use.
 
