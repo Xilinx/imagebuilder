@@ -87,10 +87,6 @@ function add_device_tree_kernel()
     local size=$3
     local bootargs=$4
 
-    if test -z "$bootargs"
-    then
-        bootargs="console=ttyAMA0"
-    fi
     dt_mknode "$path" "module$addr"
     dt_set "$path/module$addr" "compatible" "str_a" "multiboot,kernel multiboot,module"
     dt_set "$path/module$addr" "reg" "hex"  "0x0 $addr 0x0 $(printf "0x%x" $size)"
@@ -350,6 +346,10 @@ function xen_config()
         if test -z "${DOMU_VCPUS[$i]}"
         then
             DOMU_VCPUS[$i]=1
+        fi
+        if test -z "${DOMU_CMD[$i]}"
+        then
+            DOMU_CMD[$i]="console=ttyAMA0"
         fi
         i=$(( $i + 1 ))
     done
