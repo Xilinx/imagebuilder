@@ -34,6 +34,7 @@ LOAD_CMD="tftpb"
 DEVICE_TREE="mpsoc.dtb"
 XEN="xen"
 XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=1G dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null"
+XEN_PASSTHROUGH_PATHS="/axi/ethernet@ff0e0000 /axi/serial@ff000000"
 DOM0_KERNEL="Image-dom0"
 DOM0_CMD="console=hvc0 earlycon=xen earlyprintk=xen clk_ignore_unused"
 DOM0_RAMDISK="dom0-ramdisk.cpio"
@@ -85,6 +86,9 @@ Where:
 
 - XEN_CMD specifies the command line arguments used for Xen.  If not
   set, the default one will be used.
+
+- XEN_PASSTHROUGH_PATHS specifies the passthrough devices (separated
+  by spaces). It adds "xen,passthrough" to the corresponding dtb nodes.
 
 - DOM0_KERNEL specifies the Dom0 kernel file to load.
 

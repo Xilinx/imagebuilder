@@ -133,6 +133,11 @@ function xen_device_tree_editing()
         dt_set "/chosen/dom0-ramdisk" "reg" "hex" "0x0 $ramdisk_addr 0x0 $(printf "0x%x" $ramdisk_size)"
     fi
 
+    for devpath in $XEN_PASSTHROUGH_PATHS
+    do
+        dt_set "$devpath" "xen,passthrough" "str_a"
+    done
+
     i=0
     while test $i -lt $NUM_DOMUS
     do
