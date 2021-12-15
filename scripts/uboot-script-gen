@@ -549,6 +549,13 @@ xen_file_loading()
             i=$(( $i + 1 ))
             continue
         fi
+
+        if test -z "${DOMU_KERNEL[$i]}"
+        then
+            echo "DOMU_KERNEL[$i] is not defined"
+            cleanup_and_return_err
+        fi
+
         check_compressed_file_type ${DOMU_KERNEL[$i]} "executable"
         domU_kernel_addr[$i]=$memaddr
         load_file ${DOMU_KERNEL[$i]} "domU${i}_kernel"
