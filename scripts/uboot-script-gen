@@ -2,14 +2,153 @@
 
 offset=$((2*1024*1024))
 filesize=0
-prog_req=(mkimage file fdtput)
+prog_req=(mkimage file fdtput mktemp awk)
 tmp_files=()
+tmp_dirs=()
 
 function remove_tmp_files()
 {
     for i in "${tmp_files[@]}"
     do
-        rm -f "$i"
+        rm -r "$i"
+    done
+
+    for i in "${tmp_dirs[@]}"
+    do
+        rm -rf "$i"
+    done
+}
+
+function sanity_check_partial_dts()
+{
+    local domU_passthrough_path="$1"
+    local repo="$2"
+    local dir="$3"
+    local address_cells_val
+    local size_cells_val
+    local tmpdtb
+    local val
+    local file
+
+    for devpath in $domU_passthrough_path
+    do
+        file=${devpath##*/}
+        file="$repo"/"$dir"/"$file".dts
+
+        if ! test -f "$file"
+        then
+            echo "Device tree \"$file\" is not present"
+            cleanup_and_return_err
+        fi
+
+        tmpdtb=`mktemp`
+        dtc -I dts -O dtb -o $tmpdtb "$file"
+        tmp_files+=($tmpdtb)
+
+        val=$(fdtget $tmpdtb /passthrough \#address-cells)
+        if test -z "$address_cells_val"
+        then
+            address_cells_val="$val"
+        else
+            if test "$address_cells_val" -ne "$val"
+            then
+                echo "Address cells mismatch for ${DOMU_PASSTHROUGH_PATHS[$i]}"
+                cleanup_and_return_err
+            fi
+        fi
+
+        val=$(fdtget $tmpdtb /passthrough \#size-cells)
+        if test -z "$size_cells_val"
+        then
+            size_cells_val="$val"
+        else
+            if test "$size_cells_val" -ne "$val"
+            then
+                echo "Size cells mismatch for ${DOMU_PASSTHROUGH_PATHS[$i]}"
+                cleanup_and_return_err
+            fi
+        fi
+    done
+}
+
+function compile_merge_partial_dts()
+{
+    local repo=$(echo "$1" | awk '{print $1}')
+    local dir=$(echo "$1" | awk '{print $2}')
+    local tmp
+    local tmp_dtb_dir
+
+    if [[ "$repo" =~ .*@.*:.* ]]
+    then
+        tmp=`mktemp -d`
+        tmp_dirs+=($tmp)
+
+        echo "Cloning git repo \"$git_repo\""
+        git clone "$repo" $tmp
+        if [ $? -ne 0 ]
+        then
+            echo "Error occurred while cloning \"$git_repo\""
+            cleanup_and_return_err
+        fi
+
+        repo=$tmp
+    fi
+
+    tmp_dtb_dir=`mktemp -d "partial-dtbs-XXX"`
+
+    if test -z "$dir"
+    then
+        dir="."
+    fi
+
+    i=0
+    while test $i -lt $NUM_DOMUS
+    do
+        if test -z "${DOMU_PASSTHROUGH_PATHS[$i]}"
+        then
+            echo "DOMU_PASSTHROUGH_PATHS[$i] is not defined"
+            cleanup_and_return_err
+        fi
+
+        sanity_check_partial_dts "${DOMU_PASSTHROUGH_PATHS[$i]}" "$repo" "$dir"
+
+        tmp=`mktemp "$tmp_dtb_dir/partial-dts-domU$i-XXX"`
+        tmp_files+=($tmp)
+
+        j=1
+
+        for devpath in ${DOMU_PASSTHROUGH_PATHS[$i]}
+        do
+            file=${devpath##*/}
+            file="$repo"/"$dir"/"$file".dts
+
+            echo "/include/ \"$file\"" >> "$tmp"
+
+            # All the subsequent dts files should not have dts version mentioned
+            if [ $j -gt 1 ]
+            then
+                sed -i '/\/dts-v/d' "$file"
+            fi
+
+            j=$(( $j + 1 ))
+        done
+
+        dtc -I dts -O dtb -o "$tmp".dtb  "$tmp"
+        if [ $? -ne 0 ]
+        then
+            echo "Could not compile \"$tmp\""
+            cleanup_and_return_err
+        fi
+
+        if test "${DOMU_PASSTHROUGH_DTB[$i]}"
+        then
+            echo "Can't set both PASSTHROUGH_DTS_REPO and DOMU_PASSTHROUGH_DTB"
+            cleanup_and_return_err
+        fi
+
+        DOMU_PASSTHROUGH_DTB[$i]="$tmp".dtb
+
+        i=$(( $i + 1 ))
     done
 }
 
@@ -133,14 +272,14 @@ function xen_device_tree_editing()
         dt_set "/chosen/dom0-ramdisk" "reg" "hex" "0x0 $ramdisk_addr 0x0 $(printf "0x%x" $ramdisk_size)"
     fi
 
-    for devpath in $XEN_PASSTHROUGH_PATHS
-    do
-        dt_set "$devpath" "xen,passthrough" "str_a"
-    done
-
     i=0
     while test $i -lt $NUM_DOMUS
     do
+        for devpath in ${DOMU_PASSTHROUGH_PATHS[$i]}
+        do
+            dt_set "$devpath" "xen,passthrough" "str_a"
+        done
+
         if test "${DOMU_ROOTFS[$i]}" || test "${DOMU_NOBOOT[$i]}"
         then
             i=$(( $i + 1 ))
@@ -815,6 +954,11 @@ then
     exit 1
 fi
 
+if test -z "$NUM_DOMUS"
+then
+    NUM_DOMUS=0
+fi
+
 if test "$XEN"
 then
     os="xen"
@@ -851,6 +995,12 @@ fi
 # the cd is needed so that the relative paths will match once we use
 # tftp or move the files to a partition
 cd "$uboot_dir"
+
+if test "$PASSTHROUGH_DTS_REPO"
+then
+    compile_merge_partial_dts "$PASSTHROUGH_DTS_REPO"
+    echo "Done compiling the partial device trees"
+fi
 
 if test "$FIT"
 then
