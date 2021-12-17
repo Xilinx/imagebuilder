@@ -90,7 +90,11 @@ function compile_merge_partial_dts()
     local repo=$(echo "$1" | awk '{print $1}')
     local dir=$(echo "$1" | awk '{print $2}')
     local tmp
+    local tmpdts
     local tmp_dtb_dir
+    local file
+    local i
+    local j
 
     if [[ "$repo" =~ .*@.*:.* ]]
     then
@@ -136,13 +140,17 @@ function compile_merge_partial_dts()
             file=${devpath##*/}
             file="$repo"/"$dir"/"$file".dts
 
-            echo "/include/ \"$file\"" >> "$tmp"
-
             # All the subsequent dts files should not have dts version mentioned
             if [ $j -gt 1 ]
             then
+                tmpdts=`mktemp`
+                cp "$file" "$tmpdts"
+                tmp_files+=($tmpdts)
+                file="$tmpdts"
                 sed -i '/\/dts-v/d' "$file"
             fi
+
+            echo "/include/ \"$file\"" >> "$tmp"
 
             j=$(( $j + 1 ))
         done
