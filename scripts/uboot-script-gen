@@ -4,6 +4,12 @@ offset=$((2*1024*1024))
 filesize=0
 prog_req=(mkimage file fdtput mktemp awk)
 
+function cleanup_and_return_err()
+{
+    rm -f $UBOOT_SOURCE $UBOOT_SCRIPT
+    remove_tmp_files
+    exit 1
+}
 
 function dt_mknode()
 {
@@ -854,8 +860,14 @@ cd "$uboot_dir"
 
 if test "$PASSTHROUGH_DTS_REPO"
 then
-    compile_merge_partial_dts "$PASSTHROUGH_DTS_REPO"
-    echo "Done compiling the partial device trees"
+    output_dir=`mktemp -d "partial-dtbs-XXX"`
+    compile_merge_partial_dts $output_dir "$PASSTHROUGH_DTS_REPO"
+    if test $? -ne 0
+    then
+        # Remove the output dir holding the partial dtbs in case of any error
+        tmp_dirs+=($output_dir)
+        cleanup_and_return_err
+    fi
 fi
 
 if test "$FIT"

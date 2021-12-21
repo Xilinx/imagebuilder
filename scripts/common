@@ -26,13 +26,6 @@ function remove_tmp_files()
     done
 }
 
-function cleanup_and_return_err()
-{
-    rm -f $UBOOT_SOURCE $UBOOT_SCRIPT
-    remove_tmp_files
-    exit 1
-}
-
 function sanity_check_partial_dts()
 {
     local domU_passthrough_path="$1"
@@ -52,7 +45,7 @@ function sanity_check_partial_dts()
         if ! test -f "$file"
         then
             echo "Device tree \"$file\" is not present"
-            cleanup_and_return_err
+            return 1
         fi
 
         tmpdtb=`mktemp`
@@ -67,7 +60,7 @@ function sanity_check_partial_dts()
             if test "$address_cells_val" -ne "$val"
             then
                 echo "Address cells mismatch for ${DOMU_PASSTHROUGH_PATHS[$i]}"
-                cleanup_and_return_err
+                return 1
             fi
         fi
 
@@ -79,19 +72,21 @@ function sanity_check_partial_dts()
             if test "$size_cells_val" -ne "$val"
             then
                 echo "Size cells mismatch for ${DOMU_PASSTHROUGH_PATHS[$i]}"
-                cleanup_and_return_err
+                return 1
             fi
         fi
     done
+
+    return 0
 }
 
 function compile_merge_partial_dts()
 {
-    local repo=$(echo "$1" | awk '{print $1}')
-    local dir=$(echo "$1" | awk '{print $2}')
+    local dtb_dir=$1
+    local repo=$(echo "$2" | awk '{print $1}')
+    local dir=$(echo "$2" | awk '{print $2}')
     local tmp
     local tmpdts
-    local tmp_dtb_dir
     local file
     local i
     local j
@@ -103,16 +98,14 @@ function compile_merge_partial_dts()
 
         echo "Cloning git repo \"$git_repo\""
         git clone "$repo" $tmp
-        if [ $? -ne 0 ]
+        if test $? -ne 0
         then
             echo "Error occurred while cloning \"$git_repo\""
-            cleanup_and_return_err
+            return 1
         fi
 
         repo=$tmp
     fi
-
-    tmp_dtb_dir=`mktemp -d "partial-dtbs-XXX"`
 
     if test -z "$dir"
     then
@@ -125,12 +118,16 @@ function compile_merge_partial_dts()
         if test -z "${DOMU_PASSTHROUGH_PATHS[$i]}"
         then
             echo "DOMU_PASSTHROUGH_PATHS[$i] is not defined"
-            cleanup_and_return_err
+            return 1
         fi
 
         sanity_check_partial_dts "${DOMU_PASSTHROUGH_PATHS[$i]}" "$repo" "$dir"
+        if test $? -ne 0
+        then
+            return 1
+        fi
 
-        tmp=`mktemp "$tmp_dtb_dir/partial-dts-domU$i-XXX"`
+        tmp=`mktemp "$dtb_dir/partial-dts-domU$i-XXX"`
         tmp_files+=($tmp)
 
         j=1
@@ -141,7 +138,7 @@ function compile_merge_partial_dts()
             file="$repo"/"$dir"/"$file".dts
 
             # All the subsequent dts files should not have dts version mentioned
-            if [ $j -gt 1 ]
+            if test $j -gt 1
             then
                 tmpdts=`mktemp`
                 cp "$file" "$tmpdts"
@@ -156,20 +153,22 @@ function compile_merge_partial_dts()
         done
 
         dtc -I dts -O dtb -o "$tmp".dtb  "$tmp"
-        if [ $? -ne 0 ]
+        if test $? -ne 0
         then
             echo "Could not compile \"$tmp\""
-            cleanup_and_return_err
+            return 1
         fi
 
         if test "${DOMU_PASSTHROUGH_DTB[$i]}"
         then
             echo "Can't set both PASSTHROUGH_DTS_REPO and DOMU_PASSTHROUGH_DTB"
-            cleanup_and_return_err
+            return 1
         fi
 
         DOMU_PASSTHROUGH_DTB[$i]="$tmp".dtb
 
         i=$(( $i + 1 ))
     done
+
+    return 0
 }
