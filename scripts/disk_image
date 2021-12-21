@@ -1,10 +1,27 @@
 #!/bin/bash
 
-# This helps to see what is going on
-set -e
-
 PROG_REQ=( kpartx mkfs.ext4 losetup sgdisk readlink awk )
 SLACK=128
+
+function cleanup_disk_image()
+{
+    kpartx -d /dev/mapper/diskimage
+    dmsetup remove diskimage
+    losetup -d $_loop_dev
+
+    remove_tmp_files
+
+    if [ "$DESTDIR_DEL" = true ]
+    then
+        rm -rf "$DESTDIR"
+    fi
+}
+
+function cleanup_disk_image_error()
+{
+    cleanup_disk_image
+    rm $IMG
+}
 
 function check_depends()
 {
@@ -58,6 +75,7 @@ function generate_domU_configs()
     # $j + 1 - 1 as it is starting from 0
     local n=$1
     local dest
+    local dtb_name
 
     mount -t ext4 /dev/mapper/diskimage$j $DESTDIR/part/disk$j
     mkdir -p $DESTDIR/part/disk$j/etc/xen
@@ -68,10 +86,30 @@ function generate_domU_configs()
     do
         if test "${DOMU_NOBOOT[$i]}"
         then
+            if test -z "${DOMU_PASSTHROUGH_DTB[$i]}" && test "${DOMU_PASSTHROUGH_PATHS[$i]}"
+            then
+                output_dir=`mktemp -d`
+                tmp_dirs+=($output_dir)
+
+                # Check if the below function returns error
+                # and unmount the partition
+                compile_merge_partial_dts $output_dir "$PASSTHROUGH_DTS_REPO"
+                if test $? -ne 0
+                then
+                    umount $DESTDIR/part/disk$j
+                    cleanup_disk_image_error
+                    exit 1
+                fi
+            fi
+
             dest="$DESTDIR/part/disk$j/etc/xen/domU$i.cfg"
+            cp ${DOMU_PASSTHROUGH_DTB[$i]} $DESTDIR/part/disk$j/etc/xen/
             echo "name=\"domU$i\"" >> $dest
             echo "memory=${DOMU_MEM[$i]}" >> $dest
             echo "vcpus=${DOMU_VCPUS[$i]}" >> $dest
+
+            dtb_name="$(basename ${DOMU_PASSTHROUGH_DTB[$i]})"
+            echo "device_tree=\"/etc/xen/$dtb_name\"" >> $dest
             echo "# mount $first_part /boot" >> $dest
             echo "kernel=\"/boot/${DOMU_KERNEL[$i]}\"" >> $dest
             if test "${DOMU_RAMDISK[$i]}"
@@ -301,6 +339,9 @@ DESTDIR_ABS="$(readlink -f $DESTDIR)"
 check_depends
 
 source "$CFG_FILE"
+
+SCRIPT_PATH=$(dirname "$0")
+source "$SCRIPT_PATH/common"
 
 i=0
 while test $i -lt $NUM_DOMUS
@@ -546,12 +587,4 @@ do
     i=$(( $i + 1 ))
 done
 
-
-kpartx -d /dev/mapper/diskimage
-dmsetup remove diskimage
-losetup -d $_loop_dev
-
-if [ "$DESTDIR_DEL" = true ]
-then
-    rm -rf "$DESTDIR"
-fi
+cleanup_disk_image
