@@ -392,13 +392,10 @@ function generate_domU_configs()
             fi
 
             dest="$DESTDIR/part/disk$j/etc/xen/domU$i.cfg"
-            cp ${DOMU_PASSTHROUGH_DTB[$i]} $DESTDIR/part/disk$j/etc/xen/
             echo "name=\"domU$i\"" >> $dest
             echo "memory=${DOMU_MEM[$i]}" >> $dest
             echo "vcpus=${DOMU_VCPUS[$i]}" >> $dest
 
-            dtb_name="$(basename ${DOMU_PASSTHROUGH_DTB[$i]})"
-            echo "device_tree=\"/etc/xen/$dtb_name\"" >> $dest
             echo "# mount $first_part /boot" >> $dest
             echo "kernel=\"/boot/${DOMU_KERNEL[$i]}\"" >> $dest
             if test "${DOMU_RAMDISK[$i]}"
@@ -426,12 +423,18 @@ function generate_domU_configs()
                 echo "disk=[\"$retval,,xvda\"]" >> $dest
             fi
 
-            update_domU_cfg  ${DOMU_PASSTHROUGH_DTB[$i]} $dest
-            if test $? -ne 0
+            if test "${DOMU_PASSTHROUGH_DTB[$i]}"
             then
-                umount $DESTDIR/part/disk$j
-                cleanup_disk_image_error
-                exit 1
+                cp ${DOMU_PASSTHROUGH_DTB[$i]} $DESTDIR/part/disk$j/etc/xen/
+                dtb_name="$(basename ${DOMU_PASSTHROUGH_DTB[$i]})"
+                echo "device_tree=\"/etc/xen/$dtb_name\"" >> $dest
+                update_domU_cfg  ${DOMU_PASSTHROUGH_DTB[$i]} $dest
+                if test $? -ne 0
+                then
+                    umount $DESTDIR/part/disk$j
+                    cleanup_disk_image_error
+                    exit 1
+                fi
             fi
         fi
 
