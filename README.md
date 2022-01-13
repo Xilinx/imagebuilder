@@ -34,7 +34,7 @@ LOAD_CMD="tftpb"
 DEVICE_TREE="mpsoc.dtb"
 XEN="xen"
 XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=1G dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null"
-XEN_PASSTHROUGH_PATHS="/axi/ethernet@ff0e0000 /axi/serial@ff000000"
+PASSTHROUGH_DTS_REPO="git@github.com:Xilinx/xen-passthrough-device-trees.git device-trees-2021.2"
 DOM0_KERNEL="Image-dom0"
 DOM0_CMD="console=hvc0 earlycon=xen earlyprintk=xen clk_ignore_unused"
 DOM0_RAMDISK="dom0-ramdisk.cpio"
@@ -44,9 +44,9 @@ DT_OVERLAY[0]="host_dt_overlay.dtbo"
 
 NUM_DOMUS=2
 DOMU_KERNEL[0]="zynqmp-dom1/Image-domU"
+DOMU_PASSTHROUGH_PATHS[0]="/axi/ethernet@ff0e0000 /axi/serial@ff000000"
 DOMU_CMD[0]="console=ttyPS0 earlycon console=ttyPS0,115200 clk_ignore_unused rdinit=/sbin/init root=/dev/ram0 init=/bin/sh"
 DOMU_RAMDISK[0]="zynqmp-dom1/domU-ramdisk.cpio"
-DOMU_PASSTHROUGH_DTB[0]="zynqmp-dom1/passthrough-example-part.dtb"
 DOMU_KERNEL[1]="zynqmp-dom2/Image-domU"
 DOMU_CMD[1]="console=ttyAMA0 clk_ignore_unused rdinit=/sbin/init root=/dev/ram0 init=/bin/sh"
 DOMU_RAMDISK[1]="zynqmp-dom2/domU-ramdisk.cpio"
@@ -87,8 +87,11 @@ Where:
 - XEN_CMD specifies the command line arguments used for Xen.  If not
   set, the default one will be used.
 
-- XEN_PASSTHROUGH_PATHS specifies the passthrough devices (separated
-  by spaces). It adds "xen,passthrough" to the corresponding dtb nodes.
+- PASSTHROUGH_DTS_REPO specifies the git repository and/or the directory
+  which contains the partial device trees. This is optional. However, if
+  this is specified, then XEN_PASSTHROUGH_PATHS need to be specified.
+  uboot-script-gen will compile the partial device trees which have
+  been specified in XEN_PASSTHROUGH_PATHS.
 
 - DOM0_KERNEL specifies the Dom0 kernel file to load.
 
@@ -114,8 +117,21 @@ Where:
 
 - DOMU_RAMDISK[number] specifies the DomU ramdisk to use.
 
-- DOMU_PASSTHROUGH_DTB[number] specifies the device assignment
-  configuration, see xen.git:docs/misc/arm/passthrough.txt
+- DOMU_PASSTHROUGH_PATHS[number] specifies the passthrough devices (
+  separated by spaces). It adds "xen,passthrough" to the corresponding
+  dtb nodes in xen device tree blob.
+  This option is valid only when PASSTHROUGH_DTS_REPO is provided.
+  With this option, the partial device trees (corresponding to the
+  passthrough devices) from the PASSTHROUGH_DTS_REPO, are compiled
+  merged and used as DOMU[number] device tree blob.
+  Note it assumes that the names of the partial device trees will match
+  to the names of the devices specified here.
+
+- DOMU_PASSTHROUGH_DTB[number] specifies the passthrough device trees
+  blob. This option is used when DOMU_PASSTHROUGH_PATHS[number] is not
+  specified by the user.
+  NOTE that with this option, user needs to manually set xen,passthrough
+  in xen.dtb.
 
 - DOMU_MEM[number] is the amount of memory for the VM in MB, default 512MB
 

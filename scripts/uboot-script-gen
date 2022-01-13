@@ -2,16 +2,7 @@
 
 offset=$((2*1024*1024))
 filesize=0
-prog_req=(mkimage file fdtput)
-tmp_files=()
-
-function remove_tmp_files()
-{
-    for i in "${tmp_files[@]}"
-    do
-        rm -f "$i"
-    done
-}
+prog_req=(mkimage file fdtput mktemp awk)
 
 function cleanup_and_return_err()
 {
@@ -133,14 +124,14 @@ function xen_device_tree_editing()
         dt_set "/chosen/dom0-ramdisk" "reg" "hex" "0x0 $ramdisk_addr 0x0 $(printf "0x%x" $ramdisk_size)"
     fi
 
-    for devpath in $XEN_PASSTHROUGH_PATHS
-    do
-        dt_set "$devpath" "xen,passthrough" "str_a"
-    done
-
     i=0
     while test $i -lt $NUM_DOMUS
     do
+        for devpath in ${DOMU_PASSTHROUGH_PATHS[$i]}
+        do
+            dt_set "$devpath" "xen,passthrough" "str_a"
+        done
+
         if test "${DOMU_ROOTFS[$i]}" || test "${DOMU_NOBOOT[$i]}"
         then
             i=$(( $i + 1 ))
@@ -410,6 +401,13 @@ xen_file_loading()
             i=$(( $i + 1 ))
             continue
         fi
+
+        if test -z "${DOMU_KERNEL[$i]}"
+        then
+            echo "DOMU_KERNEL[$i] is not defined"
+            cleanup_and_return_err
+        fi
+
         check_compressed_file_type ${DOMU_KERNEL[$i]} "executable"
         domU_kernel_addr[$i]=$memaddr
         load_file ${DOMU_KERNEL[$i]} "domU${i}_kernel"
@@ -794,6 +792,9 @@ check_depends
 
 source "$cfg_file"
 
+SCRIPT_PATH=$(dirname "$0")
+source "$SCRIPT_PATH/common"
+
 # command line overrides
 LOAD_CMD=${load_opt:-$LOAD_CMD}
 EFI=${efi_opt:-$EFI}
@@ -813,6 +814,11 @@ if test ! "$LOAD_CMD"
 then
     echo "LOAD_CMD not set, either specify it in the config or set it with the -t option"
     exit 1
+fi
+
+if test -z "$NUM_DOMUS"
+then
+    NUM_DOMUS=0
 fi
 
 if test "$XEN"
@@ -851,6 +857,18 @@ fi
 # the cd is needed so that the relative paths will match once we use
 # tftp or move the files to a partition
 cd "$uboot_dir"
+
+if test "$PASSTHROUGH_DTS_REPO"
+then
+    output_dir=`mktemp -d "partial-dtbs-XXX"`
+    compile_merge_partial_dts $output_dir "$PASSTHROUGH_DTS_REPO"
+    if test $? -ne 0
+    then
+        # Remove the output dir holding the partial dtbs in case of any error
+        tmp_dirs+=($output_dir)
+        cleanup_and_return_err
+    fi
+fi
 
 if test "$FIT"
 then

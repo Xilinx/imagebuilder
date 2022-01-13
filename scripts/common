@@ -1,0 +1,174 @@
+#!/bin/bash
+
+# scripts/common makes use of variables defined in the ImageBuilder
+# config file as described in README.md, including but not limited to
+# the following:
+#
+# - UBOOT_SOURCE
+# - UBOOT_SCRIPT
+# - NUM_DOMUS
+# - DOMU_PASSTHROUGH_PATHS
+# - DOMU_PASSTHROUGH_DTB
+
+tmp_files=()
+tmp_dirs=()
+
+function remove_tmp_files()
+{
+    for i in "${tmp_files[@]}"
+    do
+        rm -r "$i"
+    done
+
+    for i in "${tmp_dirs[@]}"
+    do
+        rm -rf "$i"
+    done
+}
+
+function sanity_check_partial_dts()
+{
+    local domU_passthrough_path="$1"
+    local repo="$2"
+    local dir="$3"
+    local address_cells_val
+    local size_cells_val
+    local tmpdtb
+    local val
+    local file
+
+    for devpath in $domU_passthrough_path
+    do
+        file=${devpath##*/}
+        file="$repo"/"$dir"/"$file".dts
+
+        if ! test -f "$file"
+        then
+            echo "Device tree \"$file\" is not present"
+            return 1
+        fi
+
+        tmpdtb=`mktemp`
+        dtc -I dts -O dtb -o $tmpdtb "$file"
+        tmp_files+=($tmpdtb)
+
+        val=$(fdtget $tmpdtb /passthrough \#address-cells)
+        if test -z "$address_cells_val"
+        then
+            address_cells_val="$val"
+        else
+            if test "$address_cells_val" -ne "$val"
+            then
+                echo "Address cells mismatch for ${DOMU_PASSTHROUGH_PATHS[$i]}"
+                return 1
+            fi
+        fi
+
+        val=$(fdtget $tmpdtb /passthrough \#size-cells)
+        if test -z "$size_cells_val"
+        then
+            size_cells_val="$val"
+        else
+            if test "$size_cells_val" -ne "$val"
+            then
+                echo "Size cells mismatch for ${DOMU_PASSTHROUGH_PATHS[$i]}"
+                return 1
+            fi
+        fi
+    done
+
+    return 0
+}
+
+function compile_merge_partial_dts()
+{
+    local dtb_dir=$1
+    local repo=$(echo "$2" | awk '{print $1}')
+    local dir=$(echo "$2" | awk '{print $2}')
+    local tmp
+    local tmpdts
+    local file
+    local i
+    local j
+
+    if [[ "$repo" =~ .*@.*:.* ]]
+    then
+        tmp=`mktemp -d`
+        tmp_dirs+=($tmp)
+
+        echo "Cloning git repo \"$git_repo\""
+        git clone "$repo" $tmp
+        if test $? -ne 0
+        then
+            echo "Error occurred while cloning \"$git_repo\""
+            return 1
+        fi
+
+        repo=$tmp
+    fi
+
+    if test -z "$dir"
+    then
+        dir="."
+    fi
+
+    i=0
+    while test $i -lt $NUM_DOMUS
+    do
+        if test -z "${DOMU_PASSTHROUGH_PATHS[$i]}"
+        then
+            echo "DOMU_PASSTHROUGH_PATHS[$i] is not defined"
+            return 1
+        fi
+
+        sanity_check_partial_dts "${DOMU_PASSTHROUGH_PATHS[$i]}" "$repo" "$dir"
+        if test $? -ne 0
+        then
+            return 1
+        fi
+
+        tmp=`mktemp "$dtb_dir/partial-dts-domU$i-XXX"`
+        tmp_files+=($tmp)
+
+        j=1
+
+        for devpath in ${DOMU_PASSTHROUGH_PATHS[$i]}
+        do
+            file=${devpath##*/}
+            file="$repo"/"$dir"/"$file".dts
+
+            # All the subsequent dts files should not have dts version mentioned
+            if test $j -gt 1
+            then
+                tmpdts=`mktemp`
+                cp "$file" "$tmpdts"
+                tmp_files+=($tmpdts)
+                file="$tmpdts"
+                sed -i '/\/dts-v/d' "$file"
+            fi
+
+            echo "/include/ \"$file\"" >> "$tmp"
+
+            j=$(( $j + 1 ))
+        done
+
+        dtc -I dts -O dtb -o "$tmp".dtb  "$tmp"
+        if test $? -ne 0
+        then
+            echo "Could not compile \"$tmp\""
+            return 1
+        fi
+
+        if test "${DOMU_PASSTHROUGH_DTB[$i]}"
+        then
+            echo "Can't set both PASSTHROUGH_DTS_REPO and DOMU_PASSTHROUGH_DTB"
+            return 1
+        fi
+
+        DOMU_PASSTHROUGH_DTB[$i]="$tmp".dtb
+
+        i=$(( $i + 1 ))
+    done
+
+    return 0
+}

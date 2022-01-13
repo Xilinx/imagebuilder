@@ -1,10 +1,27 @@
 #!/bin/bash
 
-# This helps to see what is going on
-set -e
-
 PROG_REQ=( kpartx mkfs.ext4 losetup sgdisk readlink awk )
 SLACK=128
+
+function cleanup_disk_image()
+{
+    kpartx -d /dev/mapper/diskimage
+    dmsetup remove diskimage
+    losetup -d $_loop_dev
+
+    remove_tmp_files
+
+    if [ "$DESTDIR_DEL" = true ]
+    then
+        rm -rf "$DESTDIR"
+    fi
+}
+
+function cleanup_disk_image_error()
+{
+    cleanup_disk_image
+    rm $IMG
+}
 
 function check_depends()
 {
@@ -51,6 +68,295 @@ function add_rootfs()
     fi
 }
 
+function get_interrupts()
+{
+    local xen_intr_txt="$1"
+    local num_fields
+    local intr_num
+    local intr_str
+    local val
+    local i
+
+    while IFS= read -r val
+    do
+        #Remove the prefix "interrupts = <"
+        val=${val#*"interrupts = <"}
+
+        #Remove the suffix ">;" from each line
+        val=${val%>;*}
+
+        num_fields=`echo $val | awk '{print NF}'`
+
+        #We expect the following format
+        #interrupts = <0x00 irq_no flags 0x00 irq_no flags 0x00 irq_no flags ..>;
+        if test $((num_fields % 3)) -ne 0
+        then
+            return 1
+        fi
+
+        #Position of the first interrupt no
+        i=2
+        while test $i -lt $num_fields
+        do
+            intr_num=`echo $val | awk -v i="$i" '{print $i}'`
+
+            #The next irq_no will be after 3 places
+            i=$((i+3))
+
+            intr_num=$((intr_num + 32))
+
+            if test "$intr_str"
+            then
+                intr_str="$intr_str,"
+            fi
+            intr_str="$intr_str"$intr_num
+        done
+
+    done < "$xen_intr_txt"
+
+    if test  "$intr_str"
+    then
+        echo "$intr_str"
+    fi
+}
+
+function contains()
+{
+    local item="$1"
+    local list="$2"
+    local each
+
+    for each in $list
+    do
+        if test "$each" = "$item"
+        then
+            echo "yes"
+        fi
+    done
+}
+
+function check_if_force_assign_iommu()
+{
+    local xen_path="$1"
+    local dtb="$2"
+    local node="$3"
+    local path
+    local subnode
+    local subnode_cnt
+    local props
+    local xen_path_present
+    local assign_present
+
+    subnode_cnt=$(fdtget -l "$dtb" "$node" | wc -l)
+
+    props=$(fdtget -p "$dtb" "$node")
+    xen_path_present=$(contains "xen,path" "$props")
+    assign_present=$(contains "xen,force-assign-without-iommu" "$props")
+
+    if test "$xen_path_present" = "yes" && test "$assign_present" = "yes"
+    then
+        path=$(fdtget "$dtb" "$node" "xen,path")
+        if test "$path" = "$xen_path"
+        then
+            echo "yes"
+            return 0
+        fi
+    fi
+
+    if test $subnode_cnt -gt 0
+    then
+        for subnode in `fdtget -l  "$dtb" "$node"`
+        do
+            subnode="$node/$subnode"
+            check_if_force_assign_iommu "$xen_path" "$dtb" "$subnode"
+        done
+    fi
+}
+
+function get_iommu_prop()
+{
+    local xen_path_txt="$1"
+    local domU_dtb="$2"
+    local dtdev_str
+    local devpath
+    local force_assign
+
+    #Iterate through all the lines in the file
+    while IFS= read -r devpath
+    do
+        #Extract the path of the device from each line
+        #
+        #For eg, the line may be as follows
+        #xen,path = "/axi/serial@ff010000";
+        #
+        #What we want is the following substring
+        #"/axi/serial@ff010000"
+        devpath=`echo $devpath | awk '{print $3}'`
+        devpath=${devpath#*\"}
+        devpath=${devpath%\";*}
+
+        force_assign=$(check_if_force_assign_iommu "$devpath" "$domU_dtb" "/passthrough")
+
+        if test -z "$force_assign"
+        then
+            if test "$dtdev_str"
+            then
+                dtdev_str="$dtdev_str, "
+            fi
+            dtdev_str=${dtdev_str}"\""${devpath}"\""
+        fi
+
+    done < "$xen_path_txt"
+
+    if test "$dtdev_str"
+    then
+        echo "$dtdev_str"
+    fi
+}
+
+function get_iomem()
+{
+    local xen_reg_txt="$1"
+    local addr="$2"
+    local size="$3"
+    local val
+    local i
+    local num_fields
+    local iomem_str
+    local address_size_pair
+    local mfn
+    local gfn
+    local size_
+    local PAGE_SHIFT=12
+
+    #Iterate through all the lines in the file
+    #The file will look similar to the following:-
+    #
+    #xen,reg = <0x00 0xff010000 0x00 0x1000 0x00 0xff010000 0x00 0xff110000 0x00 0x1000 0x00 0xff110000 0x00 0xff120000 0x00 0x1000 0x00 0xff120000 0x00 0xff130000 0x00 0x1000 0x00 0xff130000 0x00 0xff140000 0x00 0x1000 0x00 0xff140000>;
+    #xen,reg = <0x00 0xfd0c0000 0x00 0x2000 0x00 0xfd0c0000>;
+    while IFS= read -r val
+    do
+        #Remove the prefix "xen,reg = <" from each line
+        val=${val#*"xen,reg = <"}
+
+        #Remove the suffix ">;" from each line
+        val=${val%>;*}
+
+        num_fields=`echo $val | awk '{print NF}'`
+
+        i=0
+
+        while test $i -lt $num_fields
+        do
+
+            i=$((i + addr))
+
+            #Extract the iomem physical address
+            mfn=`echo $val | awk -v i="$i" '{print $i}'`
+
+            #Calculate the page address
+            mfn=0x$(printf "%X" $(( $((mfn>>PAGE_SHIFT)) & 0xfffff)) )
+
+            i=$((i + size))
+
+            #Extract the size of the iomem address
+            size_=`echo $val | awk -v i="$i" '{print $i}'`
+
+            #Calculatde the number of pages
+            size_=$(printf "%X" $(( $((size_>>PAGE_SHIFT)) & 0xfffff)) )
+
+            i=$((i + addr))
+
+            #Extract the iomem guest address
+            gfn=`echo $val | awk -v i="$i" '{print $i}'`
+
+            #Calculate the page address
+            gfn=0x$(printf "%X" $(( $((gfn>>PAGE_SHIFT)) & 0xfffff)) )
+
+            if test "$gfn" != "$mfn"
+            then
+                address_size_pair="\"$mfn,${size_}@${gfn}\""
+            else
+                address_size_pair="\"$mfn,$size_\""
+            fi
+
+            if test "$iomem_str"
+            then
+                iomem_str="$iomem_str, $address_size_pair"
+            else
+                iomem_str=$address_size_pair
+            fi
+        done
+
+    done < "$xen_reg_txt"
+
+    if test "$iomem_str"
+    then
+        echo "$iomem_str"
+    fi
+}
+
+function update_domU_cfg()
+{
+    local domU_dtb="$1"
+    local domU_cfg_file="$2"
+    local addr=$(fdtget $domU_dtb /passthrough \#address-cells)
+    local size=$(fdtget $domU_dtb /passthrough \#size-cells)
+    local iomem_str
+    local dtdev_str
+    local intr_str
+    local tmp_dts
+    local tmp_search_results
+
+    tmp_dts=`mktemp`
+    tmp_files+=($tmp_dts)
+    dtc -I dtb -O dts -o "$tmp_dts" "$domU_dtb"
+
+    tmp_search_results=`mktemp`
+    tmp_files+=($tmp_search_results)
+
+    #Let's get all the lines containing xen,path in a file
+    grep 'xen,reg' "$tmp_dts" > "$tmp_search_results"
+
+    #From "xen,reg", one can determine the "iomem" attribute of the
+    #cfg file.
+    iomem_str="$(get_iomem $tmp_search_results $addr $size)"
+    if test -z "$iomem_str"
+    then
+        echo "Error occurred while generating the iomem property"
+        return 1
+    else
+        iomem_str="iomem = [ "$iomem_str" ]"
+        echo "${iomem_str}" >> $domU_cfg_file
+    fi
+
+    #Let's get all the lines containing xen,path in a file
+    grep 'xen,path' $tmp_dts > $tmp_search_results
+
+    #From "xen,path", one can determine the "dtdev" attribute of the
+    #cfg file. This attribute is optional.
+    dtdev_str=$(get_iommu_prop $tmp_search_results $domU_dtb)
+    if test "$dtdev_str"
+    then
+        dtdev_str="dtdev = [ "$dtdev_str" ]"
+        echo "${dtdev_str}" >> $domU_cfg_file
+    fi
+
+    #Let's get all the lines containing interrupts in a file
+    grep 'interrupts' $tmp_dts > $tmp_search_results
+
+    #From "interrupts", one can determine the "irqs" attribute of the
+    #cfg file.
+    intr_str=$(get_interrupts $tmp_search_results)
+    if test "$intr_str"
+    then
+        intr_str="irqs = [ "$intr_str" ]"
+        echo "${intr_str}" >> $domU_cfg_file
+    fi
+
+    return 0
+}
+
 function generate_domU_configs()
 {
     local i=0
@@ -58,6 +364,7 @@ function generate_domU_configs()
     # $j + 1 - 1 as it is starting from 0
     local n=$1
     local dest
+    local dtb_name
 
     mount -t ext4 /dev/mapper/diskimage$j $DESTDIR/part/disk$j
     mkdir -p $DESTDIR/part/disk$j/etc/xen
@@ -68,10 +375,27 @@ function generate_domU_configs()
     do
         if test "${DOMU_NOBOOT[$i]}"
         then
+            if test -z "${DOMU_PASSTHROUGH_DTB[$i]}" && test "${DOMU_PASSTHROUGH_PATHS[$i]}"
+            then
+                output_dir=`mktemp -d`
+                tmp_dirs+=($output_dir)
+
+                # Check if the below function returns error
+                # and unmount the partition
+                compile_merge_partial_dts $output_dir "$PASSTHROUGH_DTS_REPO"
+                if test $? -ne 0
+                then
+                    umount $DESTDIR/part/disk$j
+                    cleanup_disk_image_error
+                    exit 1
+                fi
+            fi
+
             dest="$DESTDIR/part/disk$j/etc/xen/domU$i.cfg"
             echo "name=\"domU$i\"" >> $dest
             echo "memory=${DOMU_MEM[$i]}" >> $dest
             echo "vcpus=${DOMU_VCPUS[$i]}" >> $dest
+
             echo "# mount $first_part /boot" >> $dest
             echo "kernel=\"/boot/${DOMU_KERNEL[$i]}\"" >> $dest
             if test "${DOMU_RAMDISK[$i]}"
@@ -97,6 +421,20 @@ function generate_domU_configs()
             then
                 add_rootfs $n
                 echo "disk=[\"$retval,,xvda\"]" >> $dest
+            fi
+
+            if test "${DOMU_PASSTHROUGH_DTB[$i]}"
+            then
+                cp ${DOMU_PASSTHROUGH_DTB[$i]} $DESTDIR/part/disk$j/etc/xen/
+                dtb_name="$(basename ${DOMU_PASSTHROUGH_DTB[$i]})"
+                echo "device_tree=\"/etc/xen/$dtb_name\"" >> $dest
+                update_domU_cfg  ${DOMU_PASSTHROUGH_DTB[$i]} $dest
+                if test $? -ne 0
+                then
+                    umount $DESTDIR/part/disk$j
+                    cleanup_disk_image_error
+                    exit 1
+                fi
             fi
         fi
 
@@ -301,6 +639,9 @@ DESTDIR_ABS="$(readlink -f $DESTDIR)"
 check_depends
 
 source "$CFG_FILE"
+
+SCRIPT_PATH=$(dirname "$0")
+source "$SCRIPT_PATH/common"
 
 i=0
 while test $i -lt $NUM_DOMUS
@@ -546,12 +887,4 @@ do
     i=$(( $i + 1 ))
 done
 
-
-kpartx -d /dev/mapper/diskimage
-dmsetup remove diskimage
-losetup -d $_loop_dev
-
-if [ "$DESTDIR_DEL" = true ]
-then
-    rm -rf "$DESTDIR"
-fi
+cleanup_disk_image
