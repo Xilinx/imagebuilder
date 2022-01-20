@@ -38,6 +38,8 @@ PASSTHROUGH_DTS_REPO="git@github.com:Xilinx/xen-passthrough-device-trees.git dev
 DOM0_KERNEL="Image-dom0"
 DOM0_CMD="console=hvc0 earlycon=xen earlyprintk=xen clk_ignore_unused"
 DOM0_RAMDISK="dom0-ramdisk.cpio"
+DOM0_MEM=1024
+DOM0_VCPUS=1
 
 NUM_DT_OVERLAY=1
 DT_OVERLAY[0]="host_dt_overlay.dtbo"
@@ -94,6 +96,12 @@ Where:
   been specified in XEN_PASSTHROUGH_PATHS.
 
 - DOM0_KERNEL specifies the Dom0 kernel file to load.
+
+- DOM0_MEM specifies the amount of memory for Dom0 VM in MB. The default
+  is 1024. This is only applicable when XEN_CMD is not specified.
+
+- DOM0_VCPUS specifies the number of VCPUs for Dom0. The default is 1. This is
+  only applicable when XEN_CMD is not specified.
 
 - DOM0_CMD specifies the command line arguments for Dom0's Linux
   kernel.  If "root=" isn't set, imagebuilder will try to determine it.

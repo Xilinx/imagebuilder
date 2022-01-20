@@ -313,7 +313,23 @@ function xen_config()
 {
     if [ -z "$XEN_CMD" ]
     then
-        XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=1G dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null"
+        if [ -z "$DOM0_MEM" ]
+        then
+            DOM0_MEM="1024"
+        fi
+
+        if [ -z "$DOM0_VCPUS" ]
+        then
+            DOM0_VCPUS="1"
+        fi
+
+        XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=${DOM0_MEM}M dom0_max_vcpus=${DOM0_VCPUS} bootscrub=0 vwfi=native sched=null"
+    else
+        if [ "$DOM0_MEM" ] || [ "$DOM0_VCPUS" ]
+        then
+            echo "One can specify either XEN_CMD or (DOM0_MEM and/or DOM0_VCPUS)"
+            exit
+        fi
     fi
 
     if [ -z "$DOM0_CMD" ]
