@@ -128,12 +128,17 @@ Where:
 - DOMU_PASSTHROUGH_PATHS[number] specifies the passthrough devices (
   separated by spaces). It adds "xen,passthrough" to the corresponding
   dtb nodes in xen device tree blob.
-  This option is valid only when PASSTHROUGH_DTS_REPO is provided.
+  This option is valid in the following two cases:
+
+  1. When PASSTHROUGH_DTS_REPO is provided.
   With this option, the partial device trees (corresponding to the
   passthrough devices) from the PASSTHROUGH_DTS_REPO, are compiled
   merged and used as DOMU[number] device tree blob.
   Note it assumes that the names of the partial device trees will match
   to the names of the devices specified here.
+
+  2. When DOMU_NOBOOT[number] is provided. In this case, it will only
+  add "xen,passthrough" as mentioned before.
 
 - DOMU_PASSTHROUGH_DTB[number] specifies the passthrough device trees
   blob. This option is used when DOMU_PASSTHROUGH_PATHS[number] is not
