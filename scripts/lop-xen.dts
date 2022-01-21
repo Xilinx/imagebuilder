@@ -1,0 +1,98 @@
+/*
+ * Copyright (c) 2019,2020 Xilinx Inc. All rights reserved.
+ *
+ * Author:
+ *       Bruce Ashfield <bruce.ashfield@xilinx.com>
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/dts-v1/;
+
+/ {
+        compatible = "system-device-tree-v1,lop";
+        lops {
+                compatible = "system-device-tree-v1,lop";
+                lop_0_1 {
+                      compatible = "system-device-tree-v1,lop,select-v1";
+                      select_1;
+                      select_2 = "xen::";
+                      lop_0_2 {
+                              compatible = "system-device-tree-v1,lop,code-v1";
+                              inherit = "lopper_lib";
+                              code = "
+                                   s = __selected__[0]
+
+                                   ## Look for dom0 label to identify dom0, if no label
+                                   ## assume it is a domu
+                                   sn = s.subnodes( children_only = True )
+
+                                   domu_count = 0
+                                   for n in sn:
+                                       if n.label != 'dom0':
+                                           domu_count += 1
+
+                                   print( 'NUM_DOMUS=%s' % domu_count )
+
+                                   domu_index = -1
+                                   for node_count, domu_node in enumerate(sn):
+                                       dom0_flag = False
+
+                                       if domu_node.label == 'dom0':
+                                           dom0_flag = True
+                                       else:
+                                           domu_index += 1
+
+                                       # cpus
+                                       try:
+                                           # note: this doesn't check the cpu mask, but probably should
+                                           cpus = domu_node['cpus']
+                                           refd_cpus, unrefd_cpus = lopper_lib.cpu_refs( tree, cpus )
+                                           cpu_count = len(refd_cpus)
+
+                                           if dom0_flag:
+                                               print( 'DOM0_VCPUS = %s' % cpu_count )
+                                           else:
+                                               print( 'DOMU_VCPUS[%s] = %s' % (domu_index,cpu_count) )
+                                       except:
+                                           pass
+
+                                       # memory
+                                       try:
+                                           ## memory is <size size range range> to allow
+                                           ## 64 bit memory, so we just want the 3rd and 4th
+                                           ## converted from bytes to MB in the output.
+                                           mem = domu_node['memory']
+                                           mem_high = mem[2]
+                                           mem_low = mem[3]
+
+                                           mem_low_mb = int(mem_low / (1024 * 1024))
+
+                                           if dom0_flag:
+                                               print( 'DOM0_MEM = %s' % mem_low_mb )
+                                           else:
+                                               print( 'DOMU_MEM[%s] = %s' % (domu_index,mem_low_mb) )
+                                       except Exception as e:
+                                           print( '[ERROR]: %s' % e )
+
+                                       # devices
+                                       try:
+                                           accessed_nodes = lopper_lib.node_accesses( tree, domu_node )
+                                           access_paths = ''
+                                           if accessed_nodes:
+                                               # print( 'accesses! %s' % accessed_nodes )
+                                               for a in accessed_nodes:
+                                                   access_paths += '\"' + a.abs_path + '\"' + ','
+
+                                               # remove any possible trailing commas
+                                               access_paths = access_paths.rstrip(',')
+                                               print( 'DOMU_PASSTHROUGH_PATHS[%s] = %s' % (domu_index,access_paths ))
+
+                                       except Exception as e:
+                                           print( '[ERROR]: %s' % e )
+
+                        ";
+                      };
+                };
+        };
+};
