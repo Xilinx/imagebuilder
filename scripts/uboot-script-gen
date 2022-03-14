@@ -732,6 +732,7 @@ function print_help
     echo "	LOAD_CMD can be:"
     echo "		sd - alias for \"load mmc 0:1\" for uboot load commands"
     echo "		scsi - alias for \"load scsi 0:1\" for uboot load commands"
+    echo "		usb - alias for \"fatload usb 0:1\" for uboot load commands"
     echo "		tftp - alias for \"tftpb\" for uboot load cammnds"
     echo "		< > - used for uboot load commands"
     echo "	FILE - output filename for the uboot script and its source, overrides option in CONFIG_FILE"
@@ -756,6 +757,9 @@ while getopts ":c:t:d:ho:k:u:ef" opt; do
             ;;
         sd )
             load_opt="load mmc 0:1"
+            ;;
+        usb )
+            load_opt="fatload usb 0:1"
             ;;
         tftp )
             load_opt="tftpb"

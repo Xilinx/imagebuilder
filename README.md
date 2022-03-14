@@ -203,10 +203,10 @@ Where:\
 -d specifies the "root" directory (paths in the config file are relative
    to it), this is not a working directory (any output file locations
    are specified in the config and any temporary files are in /tmp)\
--t specifies the u-boot command to load the binaries. "tftp", "sd" and
-   "scsi" are shorthands for "tftpb", "load mmc 0:1" and
-   "load scsi 0:1", but actually any arbitrary command can be used, for
-   instance -t "fatload" is valid.  The only special commands are:
+-t specifies the u-boot command to load the binaries. "tftp", "sd", "usb"
+   and "scsi" are shorthands for "tftpb", "load mmc 0:1", "fatload usb 0:1"
+   and "load scsi 0:1", but actually any arbitrary command can be used,
+   for instance -t "fatload" is valid.  The only special commands are:
    fit, which generates a FIT image using a script, and fit_std, which
    produces a standard style of fit image without a script, but has
    issues with dom0less configurations and isn't recommended. \
@@ -277,10 +277,10 @@ Where:\
 -o specifies the output disk image file name\
 -a specifies whether the disk image size is to be aligned to the nearest
    power of two\
--t specifies the u-boot command to load the binaries. "tftp", "sd" and
-   "scsi" are shorthands for "tftpb", "load mmc 0:1" and
-   "load scsi 0:1", but actually any arbitrary command can be used, for
-   instance -t "fatload" is valid.
+-t specifies the u-boot command to load the binaries. "tftp", "sd", "usb"
+   and "scsi" are shorthands for "tftpb", "load mmc 0:1", "fatload usb 0:1"
+   and "load scsi 0:1", but actually any arbitrary command can be used,
+   for instance -t "fatload" is valid.
 
 
 disk_image also generates on the fly a xl config file for each domU and
