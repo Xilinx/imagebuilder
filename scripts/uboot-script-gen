@@ -237,7 +237,7 @@ function check_file_type()
     # since some executables aren't recongnized
     if [ "$type" = "executable" ]
     then
-        type="executable\|data"
+        type="executable\|data\|u-boot legacy uImage"
     # file in older distros (ex: RHEL 7.4) just output data for device
     # tree blobs
     elif [ "$type" = "Device Tree Blob" ]
