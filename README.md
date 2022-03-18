@@ -28,8 +28,8 @@ To use it, first write a config file like `config`:
 ```
 MEMORY_START="0x0"
 MEMORY_END="0x80000000"
-EFI=y
 LOAD_CMD="tftpb"
+BOOT_CMD="booti"
 
 DEVICE_TREE="mpsoc.dtb"
 XEN="xen"
@@ -77,9 +77,9 @@ Where:
   argument. It has to be set either in the config file or CLI argument
   though.
 
-- EFI specifies if the bootefi boot command should be used over booti.
-  If set to anything other than "n", "no", or "false" it will enable
-  bootefi.
+- BOOT_CMD specifies the u-boot command used to boot the binaries.
+  By default, it is 'booti'. The acceptable values are 'booti', 'bootm'
+  and 'bootefi'.
 
 - DEVICE_TREE specifies the DTB file to load.
 
@@ -219,8 +219,6 @@ Where:\
    can only be used  in combination with the -k option.  This adds the
    public key into the dtb.  Then one can add this dtb back into the
    u-boot bin or elf.\
--e specifies if bootefi should be used in the uboot script (instead of \
-   booti). This is an optional argument.
 
 ### Signed FIT images
 

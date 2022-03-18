@@ -720,6 +720,15 @@ function check_depends()
     done
 }
 
+function check_boot_cmd()
+{
+    if ! [[ " bootm booti bootefi " =~ " ${BOOT_CMD}" ]]
+    then
+        echo "\"BOOT_CMD=$BOOT_CMD\" is not valid"
+        exit 1
+    fi
+}
+
 function print_help
 {
     script=`basename "$0"`
@@ -739,7 +748,6 @@ function print_help
     echo "	KEY_DIR - key directory used for signing a fit image"
     echo "	HINT - the file name of the crt and key file minus the suffix (ex, hint.crt and hint.key)"
     echo "	U-BOOT_DTB - u-boot control dtb so that the public key gets added to it"
-    echo "	-e - uses efiboot rather than booti"
     echo "	-f - enable generating a FIT image"
     echo "	-h - prints out the help message and exits "
     echo "Defaults:"
@@ -748,7 +756,7 @@ function print_help
     echo "	$script -c ../config -d ./build42 -t \"scsi load 1:1\""
 }
 
-while getopts ":c:t:d:ho:k:u:ef" opt; do
+while getopts ":c:t:d:ho:k:u:f" opt; do
     case ${opt} in
     t )
         case $OPTARG in
@@ -784,9 +792,6 @@ while getopts ":c:t:d:ho:k:u:ef" opt; do
     u )
         fits_dtb_opt=$OPTARG
         ;;
-    e )
-        efi_opt=y
-        ;;
     f )
         fit_opt=y
         ;;
@@ -817,7 +822,6 @@ source "$SCRIPT_PATH/common"
 
 # command line overrides
 LOAD_CMD=${load_opt:-$LOAD_CMD}
-EFI=${efi_opt:-$EFI}
 FIT_ENC_KEY_DIR=${fits_keyd_opt:-$FIT_ENC_KEY_DIR}
 FIT_ENC_UB_DTB=${fits_dtb_opt:-$FIT_ENC_UB_DTB}
 if [ ! -z "$uboot_out_opt" ]
@@ -834,6 +838,13 @@ if test ! "$LOAD_CMD"
 then
     echo "LOAD_CMD not set, either specify it in the config or set it with the -t option"
     exit 1
+fi
+
+if test ! "$BOOT_CMD"
+then
+    BOOT_CMD="booti"
+else
+    check_boot_cmd
 fi
 
 if test -z "$NUM_DOMUS"
@@ -978,12 +989,7 @@ device_tree_editing $device_tree_addr
 
 # disable device tree reloation
 echo "setenv fdt_high 0xffffffffffffffff" >> $UBOOT_SOURCE
-if test "$EFI" && test "$EFI" != "n" && test "$EFI" != "no" && test "$EFI" != "false"
-then
-    echo "bootefi $kernel_addr $device_tree_addr" >> $UBOOT_SOURCE
-else
-    echo "booti $kernel_addr - $device_tree_addr" >> $UBOOT_SOURCE
-fi
+echo "$BOOT_CMD $kernel_addr - $device_tree_addr" >> $UBOOT_SOURCE
 
 if test "$FIT"
 then
