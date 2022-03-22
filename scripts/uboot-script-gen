@@ -237,7 +237,7 @@ function check_file_type()
     # since some executables aren't recongnized
     if [ "$type" = "executable" ]
     then
-        type="executable\|data\|u-boot legacy uImage"
+        type="executable\|data\|ARM OpenFirmware"
     # file in older distros (ex: RHEL 7.4) just output data for device
     # tree blobs
     elif [ "$type" = "Device Tree Blob" ]
@@ -387,6 +387,21 @@ function linux_config()
     fi
 }
 
+generate_uboot_images()
+{
+    local arch=$(file -L $XEN | grep "ARM")
+
+    if test "$arch"
+    then
+        arch=arm
+    else
+        arch=arm64
+    fi
+
+    mkimage -A $arch -T kernel -C none -a $memaddr -e $memaddr -d $XEN "$XEN".ub
+    XEN="$XEN".ub
+}
+
 xen_file_loading()
 {
     check_compressed_file_type $DOM0_KERNEL "executable"
@@ -448,6 +463,12 @@ xen_file_loading()
     # secure boot on uboot expects the last PE image loaded to be the
     # signed secureboot image used
     check_compressed_file_type $XEN "executable"
+
+    if test "$BOOT_CMD" = "bootm"
+    then
+        generate_uboot_images
+    fi
+
     kernel_addr=$memaddr
     kernel_path=$XEN
     load_file "$XEN" "host_kernel"
