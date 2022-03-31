@@ -281,6 +281,12 @@ Where:\
    for instance -t "fatload" is valid.
 
 
+disk\_image supports these additional parameters on the config file:
+
+- GPT is optional and select the usage of a GPT partition table (sgdisk
+  is required)
+
+
 disk_image also generates on the fly a xl config file for each domU and
 adds them to the dom0 rootfs partition under /etc/xen. It makes it
 easier to start those domUs from dom0.

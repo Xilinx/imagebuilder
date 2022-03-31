@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PROG_REQ=( kpartx mkfs.ext4 losetup sgdisk readlink awk )
+PROG_REQ=( kpartx mkfs.ext4 mkfs.vfat losetup readlink awk parted )
 SLACK=128
 
 function cleanup_disk_image()
@@ -366,7 +366,7 @@ function generate_domU_configs()
     local dest
     local dtb_name
 
-    mount -t ext4 /dev/mapper/diskimage$j $DESTDIR/part/disk$j
+    mount /dev/mapper/diskimage$j $DESTDIR/part/disk$j
     mkdir -p $DESTDIR/part/disk$j/etc/xen
     add_rootfs 0
     first_part=$retval
@@ -512,7 +512,7 @@ function write_rootfs()
 
     # create mount point and mount diskn
     mkdir -p ${DESTDIR}/part/disk$j
-    mount -t ext4 /dev/mapper/diskimage$j $DESTDIR/part/disk$j
+    mount /dev/mapper/diskimage$j $DESTDIR/part/disk$j
     
     # Extract rootfs cpio archive into `.../part/vos_$j`
     cd ${DESTDIR}/part/disk$j
@@ -756,17 +756,37 @@ fi
 # 528 MiB (256 + 256 + 16)
 truncate $IMG -s "$_tot_size"M
 
-# create GPT partition table
-sgdisk -og $IMG
+if test "$GPT"
+then
+    # create GPT partition table
+    sgdisk -og $IMG
 
-i=0
-j=1
-while test $i -lt $_npart
-do
-    sgdisk -n $j:${_sector_start[$i]}:${_sector_end[$i]} -c $j:"Linux""$j" -t $j:8300 $IMG
-    i=$(( $i + 1 ))
-    j=$(( $j + 1 ))
-done
+    i=0
+    j=1
+    while test $i -lt $_npart
+    do
+        sgdisk -n $j:${_sector_start[$i]}:${_sector_end[$i]} -c $j:"Linux""$j" -t $j:8300 $IMG
+        i=$(( $i + 1 ))
+        j=$(( $j + 1 ))
+    done
+else
+    tmp_dos=`mktemp`
+    tmp_files+=($tmp_dos)
+
+    i=0
+    parted -s $IMG mklabel "msdos"
+    parted $IMG mkpart primary fat32 "${_sector_start[$i]}"s "${_sector_end[$i]}"s
+    parted $IMG set 1 boot on
+
+    i=1
+    j=2
+    while test $i -lt $_npart
+    do
+        parted  $IMG mkpart logical ext4 "${_sector_start[$i]}"s "${_sector_end[$i]}"s
+        i=$(( $i + 1 ))
+        j=$(( $j + 1 ))
+    done
+fi
 
 # find the first available loop device
 _loop_dev=$(losetup -f)
@@ -792,8 +812,9 @@ do
     sleep 2
 done
 
-i=0
-j=1
+mkfs.vfat -F 32 -n boot /dev/mapper/diskimage1
+i=1
+j=2
 while test $i -lt $_npart
 do
     mkfs.ext4 -L vos_$j -F /dev/mapper/diskimage$j
@@ -803,7 +824,7 @@ done
 
 # create mount point and mount disk1
 mkdir -p ${DESTDIR}/part/disk1
-mount -t ext4 /dev/mapper/diskimage1 $DESTDIR/part/disk1
+mount /dev/mapper/diskimage1 $DESTDIR/part/disk1
 
 # only copy over files that were counted for the partition size
 cd "$UBOOT_OUT"
