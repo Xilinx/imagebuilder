@@ -211,7 +211,9 @@ function load_file()
     local filename=$1
     local fit_scr_name=$2
 
-    local relative_path="$(realpath --no-symlinks --relative-to=$PWD $filename)"
+    local absolute_path="$(realpath --no-symlinks $filename)"
+    local base="$(realpath $PWD)"/
+    local relative_path=${absolute_path#"$base"}
 
     if test "$FIT"
     then
