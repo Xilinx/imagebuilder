@@ -108,6 +108,61 @@ function add_device_tree_passthrough()
     dt_set "$path/module$addr" "reg" "hex"  "0x0 $addr 0x0 $(printf "0x%x" $size)"
 }
 
+function add_device_tree_mem()
+{
+    local path=$1
+    local memory=$2
+    local regions=$3
+    local static_mem=0
+
+    # When the DOMU is configured with static allocation,
+    # the size of DOMU's memory must match the size of DOMU's static memory.
+    if test "$regions"
+    then
+        local array=($regions)
+        local index
+
+        static_mem=0
+        for (( index=1; index<${#array[@]}; index+=2 ))
+        do
+            (( static_mem += ${array[$index]} ))
+        done
+        # The property "memory" is in KB.
+        (( static_mem >>= 10 ))
+
+        if test "$memory" -ne 0 && test "$memory" -ne "$static_mem"
+        then
+            echo "$path: specified DOMU_MEM does not match DOMU_STATIC_MEM amount. Ignoring DOMU_MEM."
+        fi
+        memory=$static_mem
+    fi
+
+    if test "$memory" -eq 0
+    then
+        memory=$((512 * 1024))
+    fi
+
+    dt_set "$path" "memory" "int" "0 $memory"
+}
+
+function add_device_tree_static_mem()
+{
+    local path=$1
+    local regions=$2
+    local cells=()
+    local val
+
+    dt_set "$path" "#xen,static-mem-address-cells" "hex" "0x2"
+    dt_set "$path" "#xen,static-mem-size-cells" "hex" "0x2"
+
+    for val in ${regions[@]}
+    do
+        cells+=("$(printf "0x%x 0x%x" $(($val >> 32)) $(($val & ((1 << 32) - 1))))")
+    done
+
+    dt_set "$path" "xen,static-mem" "hex" "${cells[*]}"
+}
+
 function xen_device_tree_editing()
 {
     dt_set "/chosen" "#address-cells" "hex" "0x2"
@@ -141,8 +196,12 @@ function xen_device_tree_editing()
         dt_set "/chosen/domU$i" "compatible" "str" "xen,domain"
         dt_set "/chosen/domU$i" "#address-cells" "hex" "0x2"
         dt_set "/chosen/domU$i" "#size-cells" "hex" "0x2"
-        dt_set "/chosen/domU$i" "memory" "int" "0 ${DOMU_MEM[$i]}"
+        add_device_tree_mem "/chosen/domU$i" ${DOMU_MEM[$i]} "${DOMU_STATIC_MEM[$i]}"
         dt_set "/chosen/domU$i" "cpus" "int" "${DOMU_VCPUS[$i]}"
+        if test "${DOMU_STATIC_MEM[$i]}"
+        then
+            add_device_tree_static_mem "/chosen/domU$i" "${DOMU_STATIC_MEM[$i]}"
+        fi
         dt_set "/chosen/domU$i" "vpl011" "hex" "0x1"
         add_device_tree_kernel "/chosen/domU$i" ${domU_kernel_addr[$i]} ${domU_kernel_size[$i]} "${DOMU_CMD[$i]}"
         if test "${domU_ramdisk_addr[$i]}"
@@ -354,7 +413,7 @@ function xen_config()
     do
         if test -z "${DOMU_MEM[$i]}"
         then
-            DOMU_MEM[$i]=512
+            DOMU_MEM[$i]=0
         fi
         DOMU_MEM[$i]=$((${DOMU_MEM[$i]} * 1024))
         if test -z "${DOMU_VCPUS[$i]}"

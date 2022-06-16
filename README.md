@@ -154,6 +154,10 @@ Where:
   automatically at boot as dom0-less guest. It can still be created
   later from Dom0.
 
+- DOMU_STATIC_MEM[number]="baseaddr1 size1 ... baseaddrN sizeN"
+  if specified, indicates the host physical address regions
+  [baseaddr, baseaddr + size) to be reserved to the VM for static allocation.
+
 - LINUX is optional but specifies the Linux kernel for when Xen is NOT
   used.  To enable this set any LINUX\_\* variables and do NOT set the
   XEN variable.
