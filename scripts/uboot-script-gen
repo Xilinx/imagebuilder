@@ -203,6 +203,21 @@ function xen_device_tree_editing()
             add_device_tree_static_mem "/chosen/domU$i" "${DOMU_STATIC_MEM[$i]}"
         fi
         dt_set "/chosen/domU$i" "vpl011" "hex" "0x1"
+
+        if test "${DOMU_COLORS[$i]}"
+        then
+            local startcolor=$(echo "${DOMU_COLORS[$i]}"  | cut -d "-" -f 1)
+            local endcolor=$(echo "${DOMU_COLORS[$i]}"  | cut -d "-" -f 2)
+            local bitcolors=0
+            local bit=$startcolor
+            while test $bit -le $endcolor
+            do
+                bitcolors=$(( $bitcolors | $(( 1 << $bit)) ))
+                bit=$(( $bit + 1 ))
+            done
+            dt_set "/chosen/domU$i" "colors" "hex" "$(printf "0x%x" $bitcolors)"
+        fi
+
         add_device_tree_kernel "/chosen/domU$i" ${domU_kernel_addr[$i]} ${domU_kernel_size[$i]} "${DOMU_CMD[$i]}"
         if test "${domU_ramdisk_addr[$i]}"
         then
@@ -384,7 +399,16 @@ function xen_config()
             DOM0_VCPUS="1"
         fi
 
-        XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=${DOM0_MEM}M dom0_max_vcpus=${DOM0_VCPUS} bootscrub=0 vwfi=native sched=null"
+        if test "$DOM0_COLORS"
+        then
+            DOM0_COLORS="dom0_colors=$DOM0_COLORS"
+        fi
+        if test "$XEN_COLORS"
+        then
+            XEN_COLORS="xen_colors=$XEN_COLORS"
+        fi
+
+        XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=${DOM0_MEM}M dom0_max_vcpus=${DOM0_VCPUS} bootscrub=0 vwfi=native sched=null $XEN_COLORS $DOM0_COLORS"
     else
         if [ "$DOM0_MEM" ] || [ "$DOM0_VCPUS" ]
         then

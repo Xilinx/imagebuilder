@@ -49,6 +49,7 @@ DOMU_KERNEL[0]="zynqmp-dom1/Image-domU"
 DOMU_PASSTHROUGH_PATHS[0]="/axi/ethernet@ff0e0000 /axi/serial@ff000000"
 DOMU_CMD[0]="console=ttyPS0 earlycon console=ttyPS0,115200 clk_ignore_unused rdinit=/sbin/init root=/dev/ram0 init=/bin/sh"
 DOMU_RAMDISK[0]="zynqmp-dom1/domU-ramdisk.cpio"
+DOMU_COLORS[0]="6-14"
 DOMU_KERNEL[1]="zynqmp-dom2/Image-domU"
 DOMU_CMD[1]="console=ttyAMA0 clk_ignore_unused rdinit=/sbin/init root=/dev/ram0 init=/bin/sh"
 DOMU_RAMDISK[1]="zynqmp-dom2/domU-ramdisk.cpio"
@@ -86,6 +87,9 @@ Where:
 - XEN specifies the Xen hypervisor binary to load. Note that it has to
   be a regular Xen binary, not a u-boot binary.
 
+- XEN_COLORS specifies the colors (cache coloring) to be used for Xen
+  and is in the format startcolor-endcolor
+
 - XEN_CMD specifies the command line arguments used for Xen.  If not
   set, the default one will be used.
 
@@ -102,6 +106,9 @@ Where:
 
 - DOM0_VCPUS specifies the number of VCPUs for Dom0. The default is 1. This is
   only applicable when XEN_CMD is not specified.
+
+- DOM0_COLORS specifies the colors (cache coloring) to be used for dom0
+  and is in the format startcolor-endcolor
 
 - DOM0_CMD specifies the command line arguments for Dom0's Linux
   kernel.  If "root=" isn't set, imagebuilder will try to determine it.
@@ -149,6 +156,9 @@ Where:
 - DOMU_MEM[number] is the amount of memory for the VM in MB, default 512MB
 
 - DOMU_VCPUS[number] is the number of vcpus for the VM, default 1
+
+- DOMU_COLORS[number] specifies the colors (cache coloring) to be used
+  for the domain and is in the format startcolor-endcolor
 
 - DOMU_NOBOOT[number]: if specified, the DomU is not started
   automatically at boot as dom0-less guest. It can still be created
