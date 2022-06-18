@@ -203,6 +203,7 @@ function xen_device_tree_editing()
             add_device_tree_static_mem "/chosen/domU$i" "${DOMU_STATIC_MEM[$i]}"
         fi
         dt_set "/chosen/domU$i" "vpl011" "hex" "0x1"
+        dt_set "/chosen/domU$i" "xen,enhanced" "str" "enabled"
 
         if test "${DOMU_COLORS[$i]}"
         then
