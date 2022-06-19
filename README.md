@@ -168,6 +168,10 @@ Where:
   if specified, indicates the host physical address regions
   [baseaddr, baseaddr + size) to be reserved to the VM for static allocation.
 
+- DOMU_DIRECT_MAP[number] can be set to 1 or 0.
+  If set to 1, the VM is direct mapped. The default is 1.
+  This is only applicable when DOMU_STATIC_MEM is specified.
+
 - LINUX is optional but specifies the Linux kernel for when Xen is NOT
   used.  To enable this set any LINUX\_\* variables and do NOT set the
   XEN variable.

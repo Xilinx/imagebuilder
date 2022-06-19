@@ -27,6 +27,7 @@ function dt_mknode()
 #   hex
 #   str
 #   str_a
+#   bool
 function dt_set()
 {
     local path=$1
@@ -49,6 +50,12 @@ function dt_set()
                 array+=" \"$element\""
             done
             echo "fdt set $path $var $array" >> $UBOOT_SOURCE
+        elif test $data_type = "bool"
+        then
+            if test "$data" -eq 1
+            then
+                echo "fdt set $path $var" >> $UBOOT_SOURCE
+            fi
         else
             echo "fdt set $path $var \"$data\"" >> $UBOOT_SOURCE
         fi
@@ -65,6 +72,12 @@ function dt_set()
         elif test $data_type = "str_a"
         then
             fdtput $FDTEDIT -p -t s $path $var $data
+        elif test $data_type = "bool"
+        then
+            if test "$data" -eq 1
+            then
+                fdtput $FDTEDIT -p $path $var
+            fi
         else
             fdtput $FDTEDIT -p -t s $path $var "$data"
         fi
@@ -206,6 +219,7 @@ function xen_device_tree_editing()
         if test "${DOMU_STATIC_MEM[$i]}"
         then
             add_device_tree_static_mem "/chosen/domU$i" "${DOMU_STATIC_MEM[$i]}"
+            dt_set "/chosen/domU$i" "direct-map" "bool" "${DOMU_DIRECT_MAP[$i]}"
         fi
         dt_set "/chosen/domU$i" "vpl011" "hex" "0x1"
         if test "$DOM0_KERNEL"
@@ -469,6 +483,10 @@ function xen_config()
         if test -z "${DOMU_CMD[$i]}"
         then
             DOMU_CMD[$i]="console=ttyAMA0"
+        fi
+        if test -z "${DOMU_DIRECT_MAP[$i]}"
+        then
+             DOMU_DIRECT_MAP[$i]=1
         fi
         i=$(( $i + 1 ))
     done
