@@ -168,10 +168,15 @@ function xen_device_tree_editing()
     dt_set "/chosen" "#address-cells" "hex" "0x2"
     dt_set "/chosen" "#size-cells" "hex" "0x2"
     dt_set "/chosen" "xen,xen-bootargs" "str" "$XEN_CMD"
-    dt_mknode "/chosen" "dom0"
-    dt_set "/chosen/dom0" "compatible" "str_a" "xen,linux-zimage xen,multiboot-module multiboot,module"
-    dt_set "/chosen/dom0" "reg" "hex" "0x0 $dom0_kernel_addr 0x0 $(printf "0x%x" $dom0_kernel_size)"
-    dt_set "/chosen" "xen,dom0-bootargs" "str" "$DOM0_CMD"
+
+    if test "$DOM0_KERNEL"
+    then
+        dt_mknode "/chosen" "dom0"
+        dt_set "/chosen/dom0" "compatible" "str_a" "xen,linux-zimage xen,multiboot-module multiboot,module"
+        dt_set "/chosen/dom0" "reg" "hex" "0x0 $dom0_kernel_addr 0x0 $(printf "0x%x" $dom0_kernel_size)"
+        dt_set "/chosen" "xen,dom0-bootargs" "str" "$DOM0_CMD"
+    fi
+
     if test "$DOM0_RAMDISK" && test $ramdisk_addr != "-"
     then
         dt_mknode "/chosen" "dom0-ramdisk"
@@ -203,7 +208,10 @@ function xen_device_tree_editing()
             add_device_tree_static_mem "/chosen/domU$i" "${DOMU_STATIC_MEM[$i]}"
         fi
         dt_set "/chosen/domU$i" "vpl011" "hex" "0x1"
-        dt_set "/chosen/domU$i" "xen,enhanced" "str" "enabled"
+        if test "$DOM0_KERNEL"
+        then
+            dt_set "/chosen/domU$i" "xen,enhanced" "str" "enabled"
+        fi
 
         if test "${DOMU_COLORS[$i]}"
         then
@@ -433,6 +441,19 @@ function xen_config()
             DOM0_CMD="$DOM0_CMD root=$root_dev"
         fi
     fi
+    if test -z "$DOM0_KERNEL"
+    then
+        if test "$NUM_DOMUS" -eq "0"
+        then
+            echo "Neither dom0 or domUs are specified, exiting."
+            exit 1
+        fi
+        echo "Dom0 kernel is not specified, continue with dom0less setup."
+        unset DOM0_RAMDISK
+        # Remove dom0 specific parameters from the XEN command line.
+        local params=($XEN_CMD)
+        XEN_CMD="${params[@]/dom0*/}"
+    fi
     i=0
     while test $i -lt $NUM_DOMUS
     do
@@ -490,11 +511,13 @@ generate_uboot_images()
 
 xen_file_loading()
 {
-    check_compressed_file_type $DOM0_KERNEL "executable"
-    dom0_kernel_addr=$memaddr
-    load_file $DOM0_KERNEL "dom0_linux"
-    dom0_kernel_size=$filesize
-
+    if test "$DOM0_KERNEL"
+    then
+        check_compressed_file_type $DOM0_KERNEL "executable"
+        dom0_kernel_addr=$memaddr
+        load_file $DOM0_KERNEL "dom0_linux"
+        dom0_kernel_size=$filesize
+    fi
     if test "$DOM0_RAMDISK"
     then
         check_compressed_file_type $DOM0_RAMDISK "cpio archive"
@@ -597,14 +620,16 @@ bitstream_load_and_config()
 
 create_its_file_xen()
 {
-    if test "$ramdisk_addr" != "-"
+    if test "$DOM0_KERNEL"
     then
-        load_files="\"dom0_linux\", \"dom0_ramdisk\""
-    else
-        load_files="\"dom0_linux\""
-    fi
-    # xen below
-    cat >> "$its_file" <<- EOF
+        if test "$ramdisk_addr" != "-"
+        then
+            load_files="\"dom0_linux\", \"dom0_ramdisk\""
+        else
+            load_files="\"dom0_linux\""
+        fi
+        # xen below
+        cat >> "$its_file" <<- EOF
         dom0_linux {
             description = "dom0 linux kernel binary";
             data = /incbin/("$DOM0_KERNEL");
@@ -616,6 +641,7 @@ create_its_file_xen()
             $fit_algo
         };
 	EOF
+    fi
     # domUs
     i=0
     while test $i -lt $NUM_DOMUS
