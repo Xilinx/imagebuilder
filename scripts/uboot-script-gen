@@ -410,6 +410,20 @@ function find_root_dev()
 
 function xen_config()
 {
+    if test -z "$DOM0_KERNEL"
+    then
+        if test "$NUM_DOMUS" -eq "0"
+        then
+            echo "Neither dom0 or domUs are specified, exiting."
+            exit 1
+        elif test "$DOM0_MEM" || test "$DOM0_VCPUS" || test "$DOM0_COLORS" || test "$DOM0_CMD" || test "$DOM0_RAMDISK" || test "$DOM0_ROOTFS"
+        then
+            echo "For dom0less configuration without dom0, no dom0 specific parameters should be specified, exiting."
+            exit 1
+        fi
+        echo "Dom0 kernel is not specified, continue with true dom0less setup."
+    fi
+
     if [ -z "$XEN_CMD" ]
     then
         if [ -z "$DOM0_MEM" ]
@@ -457,13 +471,6 @@ function xen_config()
     fi
     if test -z "$DOM0_KERNEL"
     then
-        if test "$NUM_DOMUS" -eq "0"
-        then
-            echo "Neither dom0 or domUs are specified, exiting."
-            exit 1
-        fi
-        echo "Dom0 kernel is not specified, continue with dom0less setup."
-        unset DOM0_RAMDISK
         # Remove dom0 specific parameters from the XEN command line.
         local params=($XEN_CMD)
         XEN_CMD="${params[@]/dom0*/}"

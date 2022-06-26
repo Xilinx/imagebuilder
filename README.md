@@ -100,6 +100,7 @@ Where:
   been specified in XEN_PASSTHROUGH_PATHS.
 
 - DOM0_KERNEL specifies the Dom0 kernel file to load.
+  For dom0less configurations, the parameter is optional.
 
 - DOM0_MEM specifies the amount of memory for Dom0 VM in MB. The default
   is 1024. This is only applicable when XEN_CMD is not specified.
