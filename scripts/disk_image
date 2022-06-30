@@ -539,7 +539,7 @@ function write_rootfs()
 function print_help
 {
     echo "usage:"
-    echo "	$0 -c CONFIG_FILE -d UBOOT_DIRECTORY -t UBOOT_TYPE <-w WORK_DIRECTORY> <-s SLACK> <-a> -o IMG_FILE"
+    echo "	$0 -c CONFIG_FILE -d UBOOT_DIRECTORY -t UBOOT_TYPE <-w WORK_DIRECTORY> <-s SLACK> <-a> -o IMG_FILE <-p PREPEND_PATH>"
     echo "	$0 -h"
     echo "where:"
     echo "	-c CONFIG_FILE - configuration file"
@@ -553,6 +553,7 @@ function print_help
     echo "	-s SLACK - free MB to add to each partition, default 128"
     echo "	-a specifies that the size of IMG_FILE has to be aligned to the nearest power of two"
     echo "	-o IMG_FILE - the output img file "
+    echo "	-p PREPEND_PATH - path to be appended before file names to customize deploy location within rootfs"
     echo "Example:"
     echo "	$0 -c ../config -d ./build42 -w tmp -o disk.img"
 }
@@ -564,7 +565,7 @@ then
     exit 1
 fi
 
-while getopts ":w:d:c:t:s:o:ah" opt
+while getopts ":w:d:c:t:s:o:ahp:" opt
 do
     case ${opt} in
     t )
@@ -605,6 +606,9 @@ do
         ;;
     a )
         ALIGN=1
+        ;;
+    p )
+        PREPEND_PATH="$OPTARG"
         ;;
     h )
         print_help
@@ -828,56 +832,61 @@ mount /dev/mapper/diskimage1 $DESTDIR/part/disk1
 
 # only copy over files that were counted for the partition size
 cd "$UBOOT_OUT"
-cp --parents "$DOM0_KERNEL" "${DESTDIR_ABS}/part/disk1/"
-cp --parents "$DEVICE_TREE" "${DESTDIR_ABS}/part/disk1/"
-cp --parents "$UBOOT_SCRIPT" "${DESTDIR_ABS}/part/disk1/"
+if [ -n "$PREPEND_PATH" ]
+then
+    mkdir -p "${DESTDIR_ABS}/part/disk1/${PREPEND_PATH}"
+fi
+
+cp --parents "$DOM0_KERNEL" "${DESTDIR_ABS}/part/disk1/${PREPEND_PATH}"
+cp --parents "$DEVICE_TREE" "${DESTDIR_ABS}/part/disk1/${PREPEND_PATH}"
+cp --parents "$UBOOT_SCRIPT" "${DESTDIR_ABS}/part/disk1/${PREPEND_PATH}"
 
 if test "${DOM0_RAMDISK}"
 then
-    cp --parents "$DOM0_RAMDISK" "${DESTDIR_ABS}/part/disk1/"
+    cp --parents "$DOM0_RAMDISK" "${DESTDIR_ABS}/part/disk1/${PREPEND_PATH}"
 fi
 if test "$NUM_DT_OVERLAY" && test "$NUM_DT_OVERLAY" -gt 0
 then
     i=0
     while test $i -lt "$NUM_DT_OVERLAY"
     do
-        cp --parents "${DT_OVERLAY[$i]}" "${DESTDIR_ABS}/part/disk1/"
+        cp --parents "${DT_OVERLAY[$i]}" "${DESTDIR_ABS}/part/disk1/${PREPEND_PATH}"
         i=$(( $i + 1 ))
     done
 fi
 if test "${UBOOT_SOURCE}"
 then
-    cp --parents "$UBOOT_SOURCE" "${DESTDIR_ABS}/part/disk1/"
+    cp --parents "$UBOOT_SOURCE" "${DESTDIR_ABS}/part/disk1/${PREPEND_PATH}"
 fi
 if test "${XEN}"
 then
-    cp --parents "$XEN" "${DESTDIR_ABS}/part/disk1/"
+    cp --parents "$XEN" "${DESTDIR_ABS}/part/disk1/${PREPEND_PATH}"
 fi
 if test "$NUM_BOOT_AUX_FILE" && test "$NUM_BOOT_AUX_FILE" -gt 0
 then
     i=0
     while test $i -lt "$NUM_BOOT_AUX_FILE"
     do
-        cp --parents "${BOOT_AUX_FILE[$i]}" "${DESTDIR_ABS}/part/disk1/"
+        cp --parents "${BOOT_AUX_FILE[$i]}" "${DESTDIR_ABS}/part/disk1/${PREPEND_PATH}"
         i=$(( $i + 1 ))
     done
 fi
 if test "${BITSTREAM}"
 then
-    cp --parents "$BITSTREAM" "${DESTDIR_ABS}/part/disk1/"
+    cp --parents "$BITSTREAM" "${DESTDIR_ABS}/part/disk1/${PREPEND_PATH}"
 fi
 
 i=0
 while test $i -lt $NUM_DOMUS
 do
-    cp --parents "${DOMU_KERNEL[$i]}" "${DESTDIR_ABS}/part/disk1/"
+    cp --parents "${DOMU_KERNEL[$i]}" "${DESTDIR_ABS}/part/disk1/${PREPEND_PATH}"
     if test "${DOMU_RAMDISK[$i]}"
     then
-        cp --parents "${DOMU_RAMDISK[$i]}" "${DESTDIR_ABS}/part/disk1/"
+        cp --parents "${DOMU_RAMDISK[$i]}" "${DESTDIR_ABS}/part/disk1/${PREPEND_PATH}"
     fi
     if test "${DOMU_PASSTHROUGH_DTB[$i]}"
     then
-        cp --parents "${DOMU_PASSTHROUGH_DTB[$i]}" "${DESTDIR_ABS}/part/disk1/"
+        cp --parents "${DOMU_PASSTHROUGH_DTB[$i]}" "${DESTDIR_ABS}/part/disk1/${PREPEND_PATH}"
     fi
     i=$(( $i + 1 ))
 done

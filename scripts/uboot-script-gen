@@ -316,7 +316,7 @@ function load_file()
     then
         echo "imxtract \$fit_addr $fit_scr_name $memaddr" >> $UBOOT_SOURCE
     else
-        echo "$LOAD_CMD $memaddr $relative_path" >> $UBOOT_SOURCE
+        echo "$LOAD_CMD $memaddr ${prepend_path:+$prepend_path/}$relative_path" >> $UBOOT_SOURCE
     fi
     add_size $filename
 }
@@ -891,7 +891,7 @@ function print_help
 {
     script=`basename "$0"`
     echo "usage:"
-    echo "	$script -c CONFIG_FILE -d DIRECTORY [-t LOAD_CMD] [-o FILE] [-k KEY_DIR/HINT [-u U-BOOT_DTB]] [-e] [-f]"
+    echo "	$script -c CONFIG_FILE -d DIRECTORY [-t LOAD_CMD] [-o FILE] [-k KEY_DIR/HINT [-u U-BOOT_DTB]] [-e] [-f] [-p PREPEND_PATH]"
     echo "	$script -h"
     echo "where:"
     echo "	CONFIG_FILE - configuration file"
@@ -907,6 +907,7 @@ function print_help
     echo "	HINT - the file name of the crt and key file minus the suffix (ex, hint.crt and hint.key)"
     echo "	U-BOOT_DTB - u-boot control dtb so that the public key gets added to it"
     echo "	-f - enable generating a FIT image"
+    echo "	PREPEND_PATH - path to be appended before file names to match deploy location within rootfs"
     echo "	-h - prints out the help message and exits "
     echo "Defaults:"
     echo "	CONFIG_FILE=$cfg_file, UBOOT_TYPE=\"LOAD_CMD\" env var, DIRECTORY=$uboot_dir"
@@ -914,7 +915,7 @@ function print_help
     echo "	$script -c ../config -d ./build42 -t \"scsi load 1:1\""
 }
 
-while getopts ":c:t:d:ho:k:u:f" opt; do
+while getopts ":c:t:d:ho:k:u:fp:" opt; do
     case ${opt} in
     t )
         case $OPTARG in
@@ -952,6 +953,9 @@ while getopts ":c:t:d:ho:k:u:f" opt; do
         ;;
     f )
         fit_opt=y
+        ;;
+    p )
+        prepend_path="$OPTARG"
         ;;
     h )
         print_help
@@ -1179,5 +1183,5 @@ then
     echo "$LOAD_CMD $fit_addr $FIT; source $fit_addr:boot_scr"
 else
     echo "Generated uboot script $UBOOT_SCRIPT, to be loaded at address $uboot_addr:"
-    echo "$LOAD_CMD $uboot_addr $UBOOT_SCRIPT; source $uboot_addr"
+    echo "$LOAD_CMD $uboot_addr ${prepend_path:+$prepend_path/}$UBOOT_SCRIPT; source $uboot_addr"
 fi
