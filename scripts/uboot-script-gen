@@ -676,7 +676,12 @@ create_its_file_xen()
             i=$(( $i + 1 ))
             continue
         fi
-        load_files+=", \"domU${i}_kernel\""
+        if test -z "$load_files"
+        then
+            load_files+="\"domU${i}_kernel\""
+        else
+            load_files+=", \"domU${i}_kernel\""
+        fi
         cat >> "$its_file" <<- EOF
         domU${i}_kernel {
             description = "domU${i} kernel binary";
