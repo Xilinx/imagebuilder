@@ -64,6 +64,7 @@ BOOT_AUX_FILE[1]="uboot.cfg"
 
 UBOOT_SOURCE="boot.source"
 UBOOT_SCRIPT="boot.scr"
+APPEND_EXTRA_CMDS="extra.txt"
 FDTEDIT="imagebuilder.dtb"
 FIT="boot.fit"
 FIT_ENC_KEY_DIR="dir/key"
@@ -196,6 +197,10 @@ Where:
 - UBOOT_SOURCE and UBOOT_SCRIPT specify the output. They are optional
   as you can pass -o FILENAME to uboot-script-gen as a command line
   parameter
+
+- APPEND_EXTRA_CMDS: is optional and specifies the path to a text file
+  containing extra u-boot commands to be added to the boot script before
+  the boot command. Useful for running custom fixup commands.
 
 - FDTEDIT is an optional and is off by default.  Specifies the output
   modified dtb, used for reference and fdt_std.
