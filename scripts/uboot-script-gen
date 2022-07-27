@@ -888,7 +888,7 @@ function check_depends()
 
 function check_boot_cmd()
 {
-    if ! [[ " bootm booti bootefi " =~ " ${BOOT_CMD}" ]]
+    if ! [[ " bootm booti bootefi none " =~ " ${BOOT_CMD}" ]]
     then
         echo "\"BOOT_CMD=$BOOT_CMD\" is not valid"
         exit 1
@@ -1167,7 +1167,14 @@ then
     cat $APPEND_EXTRA_CMDS >> $UBOOT_SOURCE
 fi
 
-echo "$BOOT_CMD $kernel_addr - $device_tree_addr" >> $UBOOT_SOURCE
+if [ "$BOOT_CMD" != "none" ]
+then
+    echo "$BOOT_CMD $kernel_addr - $device_tree_addr" >> $UBOOT_SOURCE
+else
+    # skip boot command but store load addresses to be used later
+    echo "setenv host_kernel_addr $kernel_addr" >> $UBOOT_SOURCE
+    echo "setenv host_fdt_addr $device_tree_addr" >> $UBOOT_SOURCE
+fi
 
 if test "$FIT"
 then

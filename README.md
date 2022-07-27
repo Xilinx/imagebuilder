@@ -81,7 +81,10 @@ Where:
 
 - BOOT_CMD specifies the u-boot command used to boot the binaries.
   By default, it is 'booti'. The acceptable values are 'booti', 'bootm'
-  and 'bootefi'.
+  and 'bootefi' and 'none'. If the value is 'none', the BOOT_CMD is not
+  added to the boot script, and the addresses for the Xen binary and the
+  DTB are stored in 'host_kernel_addr' and 'host_fdt_addr' u-boot
+  env variables respectively, to be used manually when booting.
 
 - DEVICE_TREE specifies the DTB file to load.
 
