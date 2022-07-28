@@ -222,7 +222,7 @@ function xen_device_tree_editing()
             dt_set "/chosen/domU$i" "direct-map" "bool" "${DOMU_DIRECT_MAP[$i]}"
         fi
         dt_set "/chosen/domU$i" "vpl011" "hex" "0x1"
-        if test "$DOM0_KERNEL"
+        if [[ "${DOMU_ENHANCED[$i]}" == 1 || ("$DOM0_KERNEL" && "${DOMU_ENHANCED[$i]}" != 0) ]]
         then
             dt_set "/chosen/domU$i" "xen,enhanced" "str" "enabled"
         fi

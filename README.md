@@ -177,6 +177,10 @@ Where:
   If set to 1, the VM is direct mapped. The default is 1.
   This is only applicable when DOMU_STATIC_MEM is specified.
 
+- DOMU_ENHANCED[number] can be set to 1 or 0, default is 1 when Dom0 is
+  present. If set to 1, the VM can use PV drivers. Older Linux kernels
+  might break.
+
 - LINUX is optional but specifies the Linux kernel for when Xen is NOT
   used.  To enable this set any LINUX\_\* variables and do NOT set the
   XEN variable.
