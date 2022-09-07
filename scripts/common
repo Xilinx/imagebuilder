@@ -13,6 +13,9 @@
 tmp_files=()
 tmp_dirs=()
 
+# Highest valid phandle. Will be decremented with each call to get_next_phandle
+phandle_next="0xfffffffe"
+
 function remove_tmp_files()
 {
     for i in "${tmp_files[@]}"
@@ -24,6 +27,14 @@ function remove_tmp_files()
     do
         rm -rf "$i"
     done
+}
+
+# Get next phandle and set it as a value (in hex) of a variable whose name is
+# passed as a first argument. Decrement global counter phandle_next.
+function get_next_phandle()
+{
+    eval "$1=$(printf "0x%x" $phandle_next)"
+    phandle_next=$(( $phandle_next - 1 ))
 }
 
 function sanity_check_partial_dts()
