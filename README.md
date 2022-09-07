@@ -181,6 +181,9 @@ Where:
   present. If set to 1, the VM can use PV drivers. Older Linux kernels
   might break.
 
+- DOMU_CPUPOOL[number] specifies the id of the cpupool (created using
+  CPUPOOL[number] option, where number == id) that will be assigned to domU.
+
 - LINUX is optional but specifies the Linux kernel for when Xen is NOT
   used.  To enable this set any LINUX\_\* variables and do NOT set the
   XEN variable.
@@ -222,6 +225,13 @@ Where:
 - FIT_ENC_UB_DTB is optional but specifies the u-boot dtb to modify and
   include the public key in.  This can only be used with
   FIT_ENC_KEY_DIR.  See the -u option below for more information.
+
+- CPUPOOL[number]="cpu@1,...,cpu@N scheduler"
+  specifies the list of cpus' node names (separated by commas) and the scheduler
+  to be used to create boot-time cpupool. If no scheduler is set, the Xen
+  default one will be used.
+
+- NUM_CPUPOOLS specifies the number of boot-time cpupools to create.
 
 Then you can invoke uboot-script-gen as follows:
 

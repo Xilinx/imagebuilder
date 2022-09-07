@@ -176,6 +176,80 @@ function add_device_tree_static_mem()
     dt_set "$path" "xen,static-mem" "hex" "${cells[*]}"
 }
 
+function add_device_tree_cpupools()
+{
+    local cpu
+    local cpus
+    local scheduler
+    local cpu_list
+    local phandle
+    local cpu_phandles
+    local i
+    local j
+
+    i=0
+    while test $i -lt $NUM_CPUPOOLS
+    do
+        cpus=$(echo ${CPUPOOL[$i]} | awk '{print $1}')
+        scheduler=$(echo ${CPUPOOL[$i]} | awk '{print $NF}')
+        cpu_phandles=
+
+        for cpu in ${cpus//,/ }
+        do
+            cpu="/cpus/$cpu"
+
+            # check if cpu exists
+            if ! fdtget "${DEVICE_TREE}" "$cpu" "reg" &> /dev/null
+            then
+                echo "$cpu does not exist"
+                cleanup_and_return_err
+            fi
+
+            # check if cpu is already assigned
+            if [[ "$cpu_list" == *"$cpu"* ]]
+            then
+                echo "$cpu already assigned to another cpupool"
+                cleanup_and_return_err
+            fi
+
+            # set phandle for a cpu if there is none
+            if ! phandle=$(fdtget -t x "${DEVICE_TREE}" "$cpu" "phandle" 2> /dev/null)
+            then
+                get_next_phandle phandle
+            fi
+
+            dt_set "$cpu" "phandle" "hex" "$phandle"
+            cpu_phandles="$cpu_phandles $phandle"
+            cpu_list="$cpu_list $cpu"
+        done
+
+        # create cpupool node
+        get_next_phandle phandle
+        dt_mknode "/chosen" "cpupool_$i"
+        dt_set "/chosen/cpupool_$i" "phandle" "hex" "$phandle"
+        dt_set "/chosen/cpupool_$i" "compatible" "str" "xen,cpupool"
+        dt_set "/chosen/cpupool_$i" "cpupool-cpus" "hex" "$cpu_phandles"
+
+        if test "$scheduler" != "$cpus"
+        then
+            dt_set "/chosen/cpupool_$i" "cpupool-sched" "str" "$scheduler"
+        fi
+
+        j=0
+        while test $j -lt $NUM_DOMUS
+        do
+            # assign cpupool to domU
+            if test "${DOMU_CPUPOOL[$j]}" -eq "$i"
+            then
+                dt_set "/chosen/domU$j" "domain-cpupool" "hex" "$phandle"
+            fi
+            j=$(( $j + 1 ))
+        done
+
+        i=$(( $i + 1 ))
+    done
+}
+
 function xen_device_tree_editing()
 {
     dt_set "/chosen" "#address-cells" "hex" "0x2"
@@ -252,6 +326,11 @@ function xen_device_tree_editing()
         fi
         i=$(( $i + 1 ))
     done
+
+    if test "$NUM_CPUPOOLS" && test "$NUM_CPUPOOLS" -gt 0
+    then
+        add_device_tree_cpupools
+    fi
 }
 
 function linux_device_tree_editing()
