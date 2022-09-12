@@ -34,7 +34,7 @@ BOOT_CMD="booti"
 DEVICE_TREE="mpsoc.dtb"
 XEN="xen"
 XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=1G dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null"
-PASSTHROUGH_DTS_REPO="git@github.com:Xilinx/xen-passthrough-device-trees.git device-trees-2021.2"
+PASSTHROUGH_DTS_REPO="git@github.com:Xilinx/xen-passthrough-device-trees.git device-trees-2021.2/zcu102"
 DOM0_KERNEL="Image-dom0"
 DOM0_CMD="console=hvc0 earlycon=xen earlyprintk=xen clk_ignore_unused"
 DOM0_RAMDISK="dom0-ramdisk.cpio"
@@ -99,9 +99,9 @@ Where:
 
 - PASSTHROUGH_DTS_REPO specifies the git repository and/or the directory
   which contains the partial device trees. This is optional. However, if
-  this is specified, then XEN_PASSTHROUGH_PATHS need to be specified.
+  this is specified, then DOMU_PASSTHROUGH_PATHS[number] need to be specified.
   uboot-script-gen will compile the partial device trees which have
-  been specified in XEN_PASSTHROUGH_PATHS.
+  been specified in DOMU_PASSTHROUGH_PATHS[number].
 
 - DOM0_KERNEL specifies the Dom0 kernel file to load.
   For dom0less configurations, the parameter is optional.
