@@ -1135,10 +1135,28 @@ fi
 # tftp or move the files to a partition
 cd "$uboot_dir"
 
-if test "$PASSTHROUGH_DTS_REPO"
+# If both PASSTHROUGH_DTS_REPO and LOPPER_PATH options are specified,
+# the former takes precedence because the partial device trees are already
+# created (probably tested), hence the reliability is higher than using lopper.
+if test "$PASSTHROUGH_DTS_REPO" || test "$LOPPER_PATH"
 then
     output_dir=`mktemp -d "partial-dtbs-XXX"`
-    compile_merge_partial_dts $output_dir "$PASSTHROUGH_DTS_REPO"
+    if test "$PASSTHROUGH_DTS_REPO"
+    then
+        compile_merge_partial_dts $output_dir "$PASSTHROUGH_DTS_REPO"
+    else
+        if test -z "$LOPPER_CMD"
+        then
+            # Default for ZynqMP MPSoC.
+            # The following command instructs lopper's extract assist to always
+            # include zynqmp-firmware node (as it contains e.g. clock-controller
+            # required by most of the devices) in the extracted tree structure
+            # and to drop nodes/properties during the extraction process that
+            # are not needed.
+            LOPPER_CMD="-i zynqmp-firmware -x interrupt-controller -x pinctrl -x power-domains -x resets -x current-speed"
+        fi
+        compile_merge_partial_dts $output_dir
+    fi
     if test $? -ne 0
     then
         # Remove the output dir holding the partial dtbs in case of any error
