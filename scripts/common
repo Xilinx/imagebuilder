@@ -40,8 +40,7 @@ function get_next_phandle()
 function sanity_check_partial_dts()
 {
     local domU_passthrough_path="$1"
-    local repo="$2"
-    local dir="$3"
+    local partial_dts_dir="$2"
     local address_cells_val
     local size_cells_val
     local tmpdtb
@@ -51,7 +50,7 @@ function sanity_check_partial_dts()
     for devpath in $domU_passthrough_path
     do
         file=${devpath##*/}
-        file="$repo"/"$dir"/"$file".dts
+        file="$partial_dts_dir"/"$file".dts
 
         if ! test -f "$file"
         then
@@ -96,6 +95,7 @@ function compile_merge_partial_dts()
     local dtb_dir=$1
     local repo=$(echo "$2" | awk '{print $1}')
     local dir=$(echo "$2" | awk '{print $2}')
+    local partial_dts_dir
     local tmp
     local tmpdts
     local file
@@ -123,6 +123,7 @@ function compile_merge_partial_dts()
         dir="."
     fi
 
+    partial_dts_dir="$repo"/"$dir"
     i=0
     while test $i -lt $NUM_DOMUS
     do
@@ -132,7 +133,7 @@ function compile_merge_partial_dts()
             return 1
         fi
 
-        sanity_check_partial_dts "${DOMU_PASSTHROUGH_PATHS[$i]}" "$repo" "$dir"
+        sanity_check_partial_dts "${DOMU_PASSTHROUGH_PATHS[$i]}" "$partial_dts_dir"
         if test $? -ne 0
         then
             return 1
@@ -146,7 +147,7 @@ function compile_merge_partial_dts()
         for devpath in ${DOMU_PASSTHROUGH_PATHS[$i]}
         do
             file=${devpath##*/}
-            file="$repo"/"$dir"/"$file".dts
+            file="$partial_dts_dir"/"$file".dts
 
             # All the subsequent dts files should not have dts version mentioned
             if test $j -gt 1
