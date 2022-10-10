@@ -22,6 +22,22 @@ function dt_mknode()
     fi
 }
 
+function split_value()
+{
+    local value=$1
+    printf "0x%X " "$(($value >> 32))"
+    printf "0x%X " "$(($value & 0xFFFFFFFF))"
+}
+
+function split_addr_size()
+{
+    local addr=$1
+    local size=$2
+
+    split_value $addr
+    split_value $size
+}
+
 # data_type is either
 #   int
 #   hex
@@ -93,7 +109,7 @@ function add_device_tree_kernel()
 
     dt_mknode "$path" "module$addr"
     dt_set "$path/module$addr" "compatible" "str_a" "multiboot,kernel multiboot,module"
-    dt_set "$path/module$addr" "reg" "hex"  "0x0 $addr 0x0 $(printf "0x%x" $size)"
+    dt_set "$path/module$addr" "reg" "hex"  "$(split_addr_size $addr $size)"
     dt_set "$path/module$addr" "bootargs" "str" "$bootargs"
 }
 
@@ -106,7 +122,7 @@ function add_device_tree_ramdisk()
 
     dt_mknode "$path"  "module$addr"
     dt_set "$path/module$addr" "compatible" "str_a" "multiboot,ramdisk multiboot,module"
-    dt_set "$path/module$addr" "reg" "hex"  "0x0 $addr 0x0 $(printf "0x%x" $size)"
+    dt_set "$path/module$addr" "reg" "hex"  "$(split_addr_size $addr $size)"
 }
 
 
@@ -118,7 +134,7 @@ function add_device_tree_passthrough()
 
     dt_mknode "$path"  "module$addr"
     dt_set "$path/module$addr" "compatible" "str_a" "multiboot,device-tree multiboot,module"
-    dt_set "$path/module$addr" "reg" "hex"  "0x0 $addr 0x0 $(printf "0x%x" $size)"
+    dt_set "$path/module$addr" "reg" "hex"  "$(split_addr_size $addr $size)"
 }
 
 function add_device_tree_mem()
@@ -257,7 +273,7 @@ function xen_device_tree_editing()
     then
         dt_mknode "/chosen" "dom0"
         dt_set "/chosen/dom0" "compatible" "str_a" "xen,linux-zimage xen,multiboot-module multiboot,module"
-        dt_set "/chosen/dom0" "reg" "hex" "0x0 $dom0_kernel_addr 0x0 $(printf "0x%x" $dom0_kernel_size)"
+        dt_set "/chosen/dom0" "reg" "hex" "$(split_addr_size $dom0_kernel_addr $dom0_kernel_size)"
         dt_set "/chosen" "xen,dom0-bootargs" "str" "$DOM0_CMD"
     fi
 
@@ -265,7 +281,7 @@ function xen_device_tree_editing()
     then
         dt_mknode "/chosen" "dom0-ramdisk"
         dt_set "/chosen/dom0-ramdisk" "compatible" "str_a" "xen,linux-initrd xen,multiboot-module multiboot,module"
-        dt_set "/chosen/dom0-ramdisk" "reg" "hex" "0x0 $ramdisk_addr 0x0 $(printf "0x%x" $ramdisk_size)"
+        dt_set "/chosen/dom0-ramdisk" "reg" "hex" "$(split_addr_size $ramdisk_addr $ramdisk_size)"
     fi
 
     i=0
