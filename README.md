@@ -203,6 +203,10 @@ Where:
 - DOMU_CPUPOOL[number] specifies the id of the cpupool (created using
   CPUPOOL[number] option, where number == id) that will be assigned to domU.
 
+- DOMU_DRIVER_DOMAIN[number] if set to 1 the domain is a driver domain.
+  Set driver_domain in xl config file. This option is only available for
+  the disk_image script.
+
 - LINUX is optional but specifies the Linux kernel for when Xen is NOT
   used.  To enable this set any LINUX\_\* variables and do NOT set the
   XEN variable.

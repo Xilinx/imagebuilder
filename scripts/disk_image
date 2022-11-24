@@ -396,6 +396,11 @@ function generate_domU_configs()
             echo "memory=${DOMU_MEM[$i]}" >> $dest
             echo "vcpus=${DOMU_VCPUS[$i]}" >> $dest
 
+            if test "${DOMU_DRIVER_DOMAIN[$i]}"
+            then
+                echo "driver_domain=${DOMU_DRIVER_DOMAIN[$i]}" >> $dest
+            fi
+
             echo "# mount $first_part /boot" >> $dest
             echo "kernel=\"/boot/${DOMU_KERNEL[$i]}\"" >> $dest
             if test "${DOMU_RAMDISK[$i]}"
