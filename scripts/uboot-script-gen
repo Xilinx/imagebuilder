@@ -523,7 +523,7 @@ function xen_config()
     then
         if [ -z "$DOM0_MEM" ]
         then
-            DOM0_MEM="1024"
+            DOM0_MEM="1500"
         fi
 
         if [ -z "$DOM0_VCPUS" ]
