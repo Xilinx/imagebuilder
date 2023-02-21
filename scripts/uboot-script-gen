@@ -1025,6 +1025,9 @@ while getopts ":c:t:d:ho:k:u:fp:" opt; do
         sd )
             load_opt="load mmc 0:1"
             ;;
+        virtio )
+            load_opt="load virtio 0:1"
+            ;;
         usb )
             load_opt="fatload usb 0:1"
             ;;
