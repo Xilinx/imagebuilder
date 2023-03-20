@@ -204,6 +204,27 @@ function add_device_tree_xen_static_heap()
     dt_set "$path" "xen,static-heap" "hex" "${cells[*]}"
 }
 
+function add_device_tree_static_shared_mem()
+{
+    local path=$1
+    local shared_mem=$2
+    local shared_mem_id=${shared_mem%% *}
+    local regions="${shared_mem#* }"
+    local cells=()
+    local shared_mem_host=${regions%% *}
+
+    dt_mknode "${path}" "shared-mem@${shared_mem_host}"
+
+    for val in ${regions[@]}
+    do
+        cells+=("$(split_value $val)")
+    done
+
+    dt_set "${path}/shared-mem@${shared_mem_host}" "compatible" "str" "xen,domain-shared-memory-v1"
+    dt_set "${path}/shared-mem@${shared_mem_host}" "xen,shm-id" "str" "${shared_mem_id}"
+    dt_set "${path}/shared-mem@${shared_mem_host}" "xen,shared-mem" "hex" "${cells[*]}"
+}
+
 function add_device_tree_cpupools()
 {
     local cpu
@@ -327,6 +348,11 @@ function xen_device_tree_editing()
         if [[ "${DOMU_ENHANCED[$i]}" == 1 || ("$DOM0_KERNEL" && "${DOMU_ENHANCED[$i]}" != 0) ]]
         then
             dt_set "/chosen/domU$i" "xen,enhanced" "str" "enabled"
+        fi
+
+        if test -n "${DOMU_SHARED_MEM[i]}"
+        then
+            add_device_tree_static_shared_mem "/chosen/domU${i}" "${DOMU_SHARED_MEM[i]}"
         fi
 
         if test "${DOMU_COLORS[$i]}"

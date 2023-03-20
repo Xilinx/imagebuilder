@@ -196,6 +196,23 @@ Where:
   if specified, indicates the host physical address regions
   [baseaddr, baseaddr + size) to be reserved to the VM for static allocation.
 
+- DOMU_SHARED_MEM[number]="SHM-ID HPA GPA size"
+  if specified, indicate SHM-ID represents the unique identifier of the shared
+  memory region, the host physical address HPA will get mapped at guest
+  address GPA in domU and the memory of size will be reserved to be shared
+  memory. The shared memory is used between two dom0less domUs.
+
+  Below is an example:
+  NUM_DOMUS=2
+  DOMU_SHARED_MEM[0]="my-shared-mem-0 0x50000000 0x6000000 0x10000000"
+  DOMU_SHARED_MEM[1]="my-shared-mem-0 0x50000000 0x6000000 0x10000000"
+
+  This static shared memory region is identified as "my-shared-mem-0", host
+  physical address starting at 0x50000000 of 256MB will be reserved to be
+  shared between two domUs. It will get mapped at 0x6000000 in both guest
+  physical address space. Both DomUs are the borrower domain, the owner
+  domain is the default owner domain DOMID_IO.
+
 - DOMU_DIRECT_MAP[number] can be set to 1 or 0.
   If set to 1, the VM is direct mapped. The default is 1.
   This is only applicable when DOMU_STATIC_MEM is specified.
