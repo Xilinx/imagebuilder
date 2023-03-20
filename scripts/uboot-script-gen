@@ -189,6 +189,21 @@ function add_device_tree_static_mem()
     dt_set "$path" "xen,static-mem" "hex" "${cells[*]}"
 }
 
+function add_device_tree_xen_static_heap()
+{
+    local path=$1
+    local regions=$2
+    local cells=()
+    local val
+
+    for val in ${regions[@]}
+    do
+        cells+=("$(split_value $val)")
+    done
+
+    dt_set "$path" "xen,static-heap" "hex" "${cells[*]}"
+}
+
 function add_device_tree_cpupools()
 {
     local cpu
@@ -343,6 +358,11 @@ function xen_device_tree_editing()
     if test "$NUM_CPUPOOLS" && test "$NUM_CPUPOOLS" -gt 0
     then
         add_device_tree_cpupools
+    fi
+
+    if test "${XEN_STATIC_HEAP}"
+    then
+        add_device_tree_xen_static_heap "/chosen" "${XEN_STATIC_HEAP}"
     fi
 }
 

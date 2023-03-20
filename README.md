@@ -97,6 +97,10 @@ Where:
 - XEN_CMD specifies the command line arguments used for Xen.  If not
   set, the default one will be used.
 
+- XEN_STATIC_HEAP="baseaddr1 size1 ... baseaddrN sizeN"
+  if specified, indicates the host physical address regions
+  [baseaddr, baseaddr + size) to be reserved as Xen static heap.
+
 - PASSTHROUGH_DTS_REPO specifies the git repository and/or the directory
   which contains the partial device trees. This is optional. However, if
   this is specified, then DOMU_PASSTHROUGH_PATHS[number] need to be specified.
