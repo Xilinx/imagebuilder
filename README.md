@@ -128,6 +128,9 @@ Where:
 - DOM0_RAMDISK specifies the Dom0 ramdisk to use. Note that it should be
   a regular ramdisk cpio.gz file, not a u-boot binary.
 
+- DOM0_VIOMMU specifies whether to enable support for virtual IOMMU for dom0
+  or not. If set to 1 - enable, 0 - disable (default case).
+
 - NUM_DT_OVERLAY specifies the number of host device tree overlays to be
   added at boot time in u-boot
 
@@ -278,6 +281,9 @@ Where:
   1: Control
   2: Hardware
   4: Xenstore
+
+- DOMU_VIOMMU[number] specifies whether to enable support for virtual IOMMU for
+  dom0less domU or not. If set to 1 - enable, 0 - disable (default case).
 
 - LINUX is optional but specifies the Linux kernel for when Xen is NOT
   used.  To enable this set any LINUX\_\* variables and do NOT set the
