@@ -313,6 +313,10 @@ function xen_device_tree_editing()
         then
             dt_set "/chosen/domU$i" "xen,enhanced" "str" "enabled"
         fi
+        if [[ "${DOMU_VIOMMU[$i]}" == 1 ]]
+        then
+            dt_set "/chosen/domU$i" "viommu" "bool" 1
+        fi
 
         if test "${DOMU_COLORS[$i]}"
         then
@@ -511,7 +515,7 @@ function xen_config()
         then
             echo "Neither dom0 or domUs are specified, exiting."
             exit 1
-        elif test "$DOM0_MEM" || test "$DOM0_VCPUS" || test "$DOM0_COLORS" || test "$DOM0_CMD" || test "$DOM0_RAMDISK" || test "$DOM0_ROOTFS"
+        elif test "$DOM0_MEM" || test "$DOM0_VCPUS" || test "$DOM0_COLORS" || test "$DOM0_CMD" || test "$DOM0_RAMDISK" || test "$DOM0_ROOTFS" || test "$DOM0_VIOMMU"
         then
             echo "For dom0less configuration without dom0, no dom0 specific parameters should be specified, exiting."
             exit 1
@@ -540,7 +544,14 @@ function xen_config()
             XEN_COLORS="xen_colors=$XEN_COLORS"
         fi
 
-        XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=${DOM0_MEM}M dom0_max_vcpus=${DOM0_VCPUS} bootscrub=0 vwfi=native sched=null $XEN_COLORS $DOM0_COLORS"
+        if [[ "$DOM0_VIOMMU" == 1 ]]
+        then
+            DOM0_VIOMMU="dom0_viommu=1"
+        else
+            DOM0_VIOMMU=
+        fi
+
+        XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=${DOM0_MEM}M dom0_max_vcpus=${DOM0_VCPUS} bootscrub=0 vwfi=native sched=null $XEN_COLORS $DOM0_COLORS $DOM0_VIOMMU"
     else
         if [ "$DOM0_MEM" ] || [ "$DOM0_VCPUS" ]
         then
