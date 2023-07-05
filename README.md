@@ -213,6 +213,10 @@ Where:
 - DOMU_VIOMMU[number] specifies whether to enable support for virtual IOMMU for
   dom0less domU or not. If set to 1 - enable, 0 - disable (default case).
 
+- DOMU_VUART_PL011[number] specifies whether to enable support for virtual
+  PL011 UART for dom0less domU or not. If set to 1 - enable, 0 - disable
+  (default, in which case SBSA UART emulation is enabled).
+
 - LINUX is optional but specifies the Linux kernel for when Xen is NOT
   used.  To enable this set any LINUX\_\* variables and do NOT set the
   XEN variable.
