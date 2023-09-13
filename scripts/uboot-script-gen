@@ -2,7 +2,7 @@
 
 offset=$((2*1024*1024))
 filesize=0
-prog_req=(mkimage file fdtput mktemp awk)
+prog_req=(mkimage file fdtput mktemp awk od)
 
 function cleanup_and_return_err()
 {
@@ -435,6 +435,21 @@ function add_size()
 {
     local filename=$1
     local size=`stat -L --printf="%s" $filename`
+    # Read arm64 header magic (https://www.kernel.org/doc/Documentation/arm64/booting.txt)
+    local arm64_header_magic=$(od -j 56 -N 4 -t x4 ${filename} | awk 'NR==1 {print $2}')
+
+    # Check for valid arm64 header magic value 0x644d5241
+    if [ "${arm64_header_magic}" = "644d5241" ]
+    then
+        # Read effective size, which may be larger than the filesize due to noload sections, e.g. bss
+        local arm64_header_size=$(od -j 16 -N 8 -t u8 ${filename} | awk 'NR==1 {print $2}')
+
+        if [ "${arm64_header_size}" -gt "${size}" ]
+        then
+            size=${arm64_header_size}
+        fi
+    fi
+
     memaddr=$(( $memaddr + $size + $offset - 1))
     memaddr=$(( $memaddr & ~($offset - 1) ))
     memaddr=`printf "0x%X\n" $memaddr`
