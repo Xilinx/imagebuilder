@@ -790,7 +790,7 @@ bitstream_load_and_config()
         check_file_type "$BITSTREAM" "BIT data"
         bitstream_addr=$memaddr
         load_file $BITSTREAM "fpga_bitstream"
-        bitstream_size=$filesize
+        bitstream_size=`printf "0x%X\n" $filesize`
         if test "$UBOOT_SOURCE"
         then
             # we assume the FPGA device is 0 here
