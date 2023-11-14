@@ -1041,7 +1041,7 @@ function check_depends()
 
 function check_boot_cmd()
 {
-    if ! [[ " bootm booti bootefi none " =~ " ${BOOT_CMD}" ]]
+    if ! [[ " bootm booti bootz bootefi none " =~ " ${BOOT_CMD}" ]]
     then
         echo "\"BOOT_CMD=$BOOT_CMD\" is not valid"
         exit 1
