@@ -431,23 +431,41 @@ function device_tree_editing()
     fi
 }
 
-function add_size()
+# Read effective image size from a header, which may be larger than the filesize
+# due to noload sections, e.g. bss.
+function get_image_size()
 {
-    local filename=$1
-    local size=`stat -L --printf="%s" $filename`
+    local image=$1
+    local effective_size=0
     # Read arm64 header magic (https://www.kernel.org/doc/Documentation/arm64/booting.txt)
-    local arm64_header_magic=$(od -j 56 -N 4 -t x4 ${filename} | awk 'NR==1 {print $2}')
+    local arm64_header_magic=$(od -j 56 -N 4 -t x4 ${image} | awk 'NR==1 {print $2}')
+    # Read arm32 header magic (http://www.simtec.co.uk/products/SWLINUX/files/booting_article.html)
+    local arm32_header_magic=$(od -j 36 -N 4 -t x4 ${image} | awk 'NR==1 {print $2}')
 
     # Check for valid arm64 header magic value 0x644d5241
     if [ "${arm64_header_magic}" = "644d5241" ]
     then
-        # Read effective size, which may be larger than the filesize due to noload sections, e.g. bss
-        local arm64_header_size=$(od -j 16 -N 8 -t u8 ${filename} | awk 'NR==1 {print $2}')
+        effective_size=$(od -j 16 -N 8 -t u8 ${image} | awk 'NR==1 {print $2}')
+    # Check for valid arm32 header magic value 0x016f2818
+    elif [ "${arm32_header_magic}" = "016f2818" ]
+    then
+        local start=$(od -j 40 -N 4 -t u4 ${image} | awk 'NR==1 {print $2}')
+        local end=$(od -j 44 -N 4 -t u4 ${image} | awk 'NR==1 {print $2}')
+        effective_size=$(( end - start ))
+    fi
 
-        if [ "${arm64_header_size}" -gt "${size}" ]
-        then
-            size=${arm64_header_size}
-        fi
+    printf "%u" $effective_size
+}
+
+function add_size()
+{
+    local filename=$1
+    local size=`stat -L --printf="%s" $filename`
+    local image_size=`get_image_size $filename`
+
+    if [ "${image_size}" -gt "${size}" ]
+    then
+        size=${image_size}
     fi
 
     memaddr=$(( $memaddr + $size + $offset - 1))
