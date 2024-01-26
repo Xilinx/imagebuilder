@@ -262,12 +262,12 @@ function add_device_tree_cpupools()
             fi
 
             # set phandle for a cpu if there is none
-            if ! phandle=$(fdtget -t x "${DEVICE_TREE}" "$cpu" "phandle" 2> /dev/null)
+            if ! phandle="0x$(fdtget -t x "${DEVICE_TREE}" "$cpu" "phandle" 2> /dev/null)"
             then
                 get_next_phandle phandle
+                dt_set "$cpu" "phandle" "hex" "$phandle"
             fi
 
-            dt_set "$cpu" "phandle" "hex" "$phandle"
             cpu_phandles="$cpu_phandles $phandle"
             cpu_list="$cpu_list $cpu"
         done
