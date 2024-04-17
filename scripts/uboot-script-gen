@@ -505,9 +505,9 @@ function check_file_type()
 
     # if file doesn't know what it is, it outputs data, so include that
     # since some executables aren't recongnized
-    if [ "$type" = "executable" ]
+    if [[ "$type" = "executable"* ]]
     then
-        type="executable\|data\|ARM OpenFirmware"
+        type="$type\|data\|ARM OpenFirmware"
     # file in older distros (ex: RHEL 7.4) just output data for device
     # tree blobs
     elif [ "$type" = "Device Tree Blob" ]
@@ -712,7 +712,7 @@ xen_file_loading()
 {
     if test "$DOM0_KERNEL"
     then
-        check_compressed_file_type $DOM0_KERNEL "executable"
+        check_compressed_file_type $DOM0_KERNEL "executable\|uImage"
         dom0_kernel_addr=$memaddr
         load_file $DOM0_KERNEL "dom0_linux"
         dom0_kernel_size=$filesize
@@ -747,7 +747,7 @@ xen_file_loading()
             cleanup_and_return_err
         fi
 
-        check_compressed_file_type ${DOMU_KERNEL[$i]} "executable"
+        check_compressed_file_type ${DOMU_KERNEL[$i]} "executable\|uImage"
         domU_kernel_addr[$i]=$memaddr
         load_file ${DOMU_KERNEL[$i]} "domU${i}_kernel"
         domU_kernel_size[$i]=$filesize
