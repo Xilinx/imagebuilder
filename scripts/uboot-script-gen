@@ -353,6 +353,19 @@ function xen_device_tree_editing()
             dt_set "/chosen/domU$i" "xen,enhanced" "str" "no-xenstore"
         fi
 
+        if test -n "${DOMU_GRANT_VER[i]}"
+        then
+            dt_set "/chosen/domU$i" "max_grant_version" "int" "${DOMU_GRANT_VER[i]}"
+        fi
+        if test -n "${DOMU_GRANT_FRAMES[i]}"
+        then
+            dt_set "/chosen/domU$i" "max_grant_frames" "int" "${DOMU_GRANT_FRAMES[i]}"
+        fi
+        if test -n "${DOMU_MAPTRACK_FRAMES[i]}"
+        then
+            dt_set "/chosen/domU$i" "max_maptrack_frames" "int" "${DOMU_MAPTRACK_FRAMES[i]}"
+        fi
+
         if test -n "${DOMU_SHARED_MEM[i]}"
         then
             add_device_tree_static_shared_mem "/chosen/domU${i}" "${DOMU_SHARED_MEM[i]}"

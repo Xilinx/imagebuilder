@@ -222,6 +222,16 @@ Where:
   kernels might break. If set to 2, "no-xenstore" is specified, see Xen
   documentation about dom0less "no-xenstore" option.
 
+- DOMU_GRANT_VER[number] is optional but specifies the maximum version
+  of grant table shared structure (the maximum security supported version
+  by Xen on Arm64 is 1)
+
+- DOMU_GRANT_FRAMES[number] is optional but specifies the maximum number
+  of grant table frames (the default value used by Xen on Arm64 is 64)
+
+- DOMU_MAPTRACK_FRAMES[number] is optional but specifies the maximum number
+  of grant maptrack frames (the default value used by Xen on Arm64 is 1024)
+
 - DOMU_CPUPOOL[number] specifies the id of the cpupool (created using
   CPUPOOL[number] option, where number == id) that will be assigned to domU.
 
