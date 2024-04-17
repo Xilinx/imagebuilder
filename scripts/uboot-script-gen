@@ -348,6 +348,9 @@ function xen_device_tree_editing()
         if [[ "${DOMU_ENHANCED[$i]}" == 1 || ("$DOM0_KERNEL" && "${DOMU_ENHANCED[$i]}" != 0) ]]
         then
             dt_set "/chosen/domU$i" "xen,enhanced" "str" "enabled"
+        elif [ "${DOMU_ENHANCED[$i]}" == 2 ]
+        then
+            dt_set "/chosen/domU$i" "xen,enhanced" "str" "no-xenstore"
         fi
 
         if test -n "${DOMU_SHARED_MEM[i]}"

@@ -217,9 +217,10 @@ Where:
   If set to 1, the VM is direct mapped. The default is 1.
   This is only applicable when DOMU_STATIC_MEM is specified.
 
-- DOMU_ENHANCED[number] can be set to 1 or 0, default is 1 when Dom0 is
-  present. If set to 1, the VM can use PV drivers. Older Linux kernels
-  might break.
+- DOMU_ENHANCED[number] can be set to 0, 1, or 2. Default is 1 when Dom0
+  is present. If set to 1, the VM can use PV drivers. Older Linux
+  kernels might break. If set to 2, "no-xenstore" is specified, see Xen
+  documentation about dom0less "no-xenstore" option.
 
 - DOMU_CPUPOOL[number] specifies the id of the cpupool (created using
   CPUPOOL[number] option, where number == id) that will be assigned to domU.
