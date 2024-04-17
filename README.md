@@ -237,6 +237,11 @@ Where:
   PL011 UART for domain. The default is 1. If explicitly set to 0, then
   "console=ttyAMA0" is not used as a default DOMU_CMD[number].
 
+- DOMU_NR_SPIS[number] is optional. It specifies a number of shared peripheral
+  interrupts (SPIs) to be assigned to domain (depending on the underlying
+  hardware platform). The minimum possible value is 0, if DOMU_VPL011[number]
+  is also explicitly set to 0. Otherwise the minimum value is 1.
+
 - DOMU_CPUPOOL[number] specifies the id of the cpupool (created using
   CPUPOOL[number] option, where number == id) that will be assigned to domU.
 
