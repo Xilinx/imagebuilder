@@ -151,7 +151,8 @@ Where:
 - DOMU_KERNEL[number] specifies the DomU kernel to use.
 
 - DOMU_CMD[number] specifies the command line arguments for DomU's Linux
-  kernel. If not set, then "console=ttyAMA0" is used.
+  kernel. If not set and DOMU_VPL011[number] is not set to 0, then
+  "console=ttyAMA0" is used.
 
 - DOMU_RAMDISK[number] specifies the DomU ramdisk to use.
 
@@ -231,6 +232,10 @@ Where:
 
 - DOMU_MAPTRACK_FRAMES[number] is optional but specifies the maximum number
   of grant maptrack frames (the default value used by Xen on Arm64 is 1024)
+
+- DOMU_VPL011[number] is optional but used to enable (1)/disable (0) a virtual
+  PL011 UART for domain. The default is 1. If explicitly set to 0, then
+  "console=ttyAMA0" is not used as a default DOMU_CMD[number].
 
 - DOMU_CPUPOOL[number] specifies the id of the cpupool (created using
   CPUPOOL[number] option, where number == id) that will be assigned to domU.

@@ -344,7 +344,10 @@ function xen_device_tree_editing()
             add_device_tree_static_mem "/chosen/domU$i" "${DOMU_STATIC_MEM[$i]}"
             dt_set "/chosen/domU$i" "direct-map" "bool" "${DOMU_DIRECT_MAP[$i]}"
         fi
-        dt_set "/chosen/domU$i" "vpl011" "hex" "0x1"
+        if test -z "${DOMU_VPL011[$i]}" || test "${DOMU_VPL011[$i]}" -eq "1"
+        then
+            dt_set "/chosen/domU$i" "vpl011" "bool" "1"
+        fi
         if [[ "${DOMU_ENHANCED[$i]}" == 1 || ("$DOM0_KERNEL" && "${DOMU_ENHANCED[$i]}" != 0) ]]
         then
             dt_set "/chosen/domU$i" "xen,enhanced" "str" "enabled"
@@ -677,7 +680,7 @@ function xen_config()
         then
             DOMU_VCPUS[$i]=1
         fi
-        if test -z "${DOMU_CMD[$i]}"
+        if test -z "${DOMU_CMD[$i]}" && (test -z "${DOMU_VPL011[$i]}" || test "${DOMU_VPL011[$i]}" -eq "1")
         then
             DOMU_CMD[$i]="console=ttyAMA0"
         fi
