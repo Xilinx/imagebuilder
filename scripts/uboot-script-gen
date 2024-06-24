@@ -211,18 +211,25 @@ function add_device_tree_static_shared_mem()
     local shared_mem_id=${shared_mem%% *}
     local regions="${shared_mem#* }"
     local cells=()
-    local shared_mem_host=${regions%% *}
-
-    dt_mknode "${path}" "shared-mem@${shared_mem_host}"
+    local node_name=
 
     for val in ${regions[@]}
     do
         cells+=("$(split_value $val)")
     done
 
-    dt_set "${path}/shared-mem@${shared_mem_host}" "compatible" "str" "xen,domain-shared-memory-v1"
-    dt_set "${path}/shared-mem@${shared_mem_host}" "xen,shm-id" "str" "${shared_mem_id}"
-    dt_set "${path}/shared-mem@${shared_mem_host}" "xen,shared-mem" "hex" "${cells[*]}"
+    # Less than 3 cells means host address not provided
+    if [ ${#cells[@]} -lt 3 ]; then
+        node_name="shared-mem-${shared_mem_id}"
+    else
+        node_name="shared-mem@${regions%% *}"
+    fi
+
+    dt_mknode "${path}" "${node_name}"
+
+    dt_set "${path}/${node_name}" "compatible" "str" "xen,domain-shared-memory-v1"
+    dt_set "${path}/${node_name}" "xen,shm-id" "str" "${shared_mem_id}"
+    dt_set "${path}/${node_name}" "xen,shared-mem" "hex" "${cells[*]}"
 }
 
 function add_device_tree_cpupools()

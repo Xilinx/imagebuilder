@@ -199,9 +199,10 @@ Where:
 
 - DOMU_SHARED_MEM[number]="SHM-ID HPA GPA size"
   if specified, indicate SHM-ID represents the unique identifier of the shared
-  memory region, the host physical address HPA will get mapped at guest
-  address GPA in domU and the memory of size will be reserved to be shared
-  memory. The shared memory is used between two dom0less domUs.
+  memory region. The host physical address HPA is optional, if specified, will
+  get mapped at guest address GPA in domU (otherwise it will come from Xen heap)
+  and the memory of size will be reserved to be shared memory. The shared memory
+  is used between two dom0less domUs.
 
   Below is an example:
   NUM_DOMUS=2
