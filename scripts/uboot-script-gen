@@ -106,11 +106,12 @@ function add_device_tree_kernel()
     local addr=$2
     local size=$3
     local bootargs=$4
+    local node_name="module@${addr#0x}"
 
-    dt_mknode "$path" "module$addr"
-    dt_set "$path/module$addr" "compatible" "str_a" "multiboot,kernel multiboot,module"
-    dt_set "$path/module$addr" "reg" "hex"  "$(split_addr_size $addr $size)"
-    dt_set "$path/module$addr" "bootargs" "str" "$bootargs"
+    dt_mknode "$path" "$node_name"
+    dt_set "$path/$node_name" "compatible" "str_a" "multiboot,kernel multiboot,module"
+    dt_set "$path/$node_name" "reg" "hex"  "$(split_addr_size $addr $size)"
+    dt_set "$path/$node_name" "bootargs" "str" "$bootargs"
 }
 
 
@@ -119,10 +120,11 @@ function add_device_tree_ramdisk()
     local path=$1
     local addr=$2
     local size=$3
+    local node_name="module@${addr#0x}"
 
-    dt_mknode "$path"  "module$addr"
-    dt_set "$path/module$addr" "compatible" "str_a" "multiboot,ramdisk multiboot,module"
-    dt_set "$path/module$addr" "reg" "hex"  "$(split_addr_size $addr $size)"
+    dt_mknode "$path"  "$node_name"
+    dt_set "$path/$node_name" "compatible" "str_a" "multiboot,ramdisk multiboot,module"
+    dt_set "$path/$node_name" "reg" "hex"  "$(split_addr_size $addr $size)"
 }
 
 
@@ -131,10 +133,11 @@ function add_device_tree_passthrough()
     local path=$1
     local addr=$2
     local size=$3
+    local node_name="module@${addr#0x}"
 
-    dt_mknode "$path"  "module$addr"
-    dt_set "$path/module$addr" "compatible" "str_a" "multiboot,device-tree multiboot,module"
-    dt_set "$path/module$addr" "reg" "hex"  "$(split_addr_size $addr $size)"
+    dt_mknode "$path"  "$node_name"
+    dt_set "$path/$node_name" "compatible" "str_a" "multiboot,device-tree multiboot,module"
+    dt_set "$path/$node_name" "reg" "hex"  "$(split_addr_size $addr $size)"
 }
 
 function add_device_tree_mem()
@@ -314,17 +317,21 @@ function xen_device_tree_editing()
 
     if test "$DOM0_KERNEL"
     then
-        dt_mknode "/chosen" "dom0"
-        dt_set "/chosen/dom0" "compatible" "str_a" "xen,linux-zimage xen,multiboot-module multiboot,module"
-        dt_set "/chosen/dom0" "reg" "hex" "$(split_addr_size $dom0_kernel_addr $dom0_kernel_size)"
+        local node_name="dom0@${dom0_kernel_addr#0x}"
+
+        dt_mknode "/chosen" "$node_name"
+        dt_set "/chosen/$node_name" "compatible" "str_a" "xen,linux-zimage xen,multiboot-module multiboot,module"
+        dt_set "/chosen/$node_name" "reg" "hex" "$(split_addr_size $dom0_kernel_addr $dom0_kernel_size)"
         dt_set "/chosen" "xen,dom0-bootargs" "str" "$DOM0_CMD"
     fi
 
     if test "$DOM0_RAMDISK" && test $ramdisk_addr != "-"
     then
-        dt_mknode "/chosen" "dom0-ramdisk"
-        dt_set "/chosen/dom0-ramdisk" "compatible" "str_a" "xen,linux-initrd xen,multiboot-module multiboot,module"
-        dt_set "/chosen/dom0-ramdisk" "reg" "hex" "$(split_addr_size $ramdisk_addr $ramdisk_size)"
+        local node_name="dom0-ramdisk@${ramdisk_addr#0x}"
+
+        dt_mknode "/chosen" "$node_name"
+        dt_set "/chosen/$node_name" "compatible" "str_a" "xen,linux-initrd xen,multiboot-module multiboot,module"
+        dt_set "/chosen/$node_name" "reg" "hex" "$(split_addr_size $ramdisk_addr $ramdisk_size)"
     fi
 
     i=0
