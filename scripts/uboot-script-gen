@@ -174,7 +174,7 @@ function add_device_tree_mem()
         memory=$((512 * 1024))
     fi
 
-    dt_set "$path" "memory" "int" "0 $memory"
+    dt_set "$path" "memory" "int" "$( split_value $memory )"
 }
 
 function add_device_tree_static_mem()
