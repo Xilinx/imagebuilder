@@ -272,7 +272,8 @@ Where:
 
 - UBOOT_SOURCE and UBOOT_SCRIPT specify the output. They are optional
   as you can pass -o FILENAME to uboot-script-gen as a command line
-  parameter
+  parameter. It has to be set either in the config file or CLI argument
+  though.
 
 - APPEND_EXTRA_CMDS: is optional and specifies the path to a text file
   containing extra u-boot commands to be added to the boot script before

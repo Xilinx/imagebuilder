@@ -1210,6 +1210,18 @@ then
     UBOOT_SCRIPT="$uboot_out_opt".scr
     UBOOT_SOURCE="$uboot_out_opt".source
 fi
+
+if test ! "$UBOOT_SOURCE"
+then
+    echo "UBOOT_SOURCE not set, either specify it in the config or set it with the -o option"
+    exit 1
+fi
+
+if test ! "$UBOOT_SCRIPT"
+then
+    UBOOT_SCRIPT="${UBOOT_SOURCE%.source}.scr"
+fi
+
 if test "$fit_opt" && ! test "$FIT"
 then
     FIT="${UBOOT_SOURCE%.source}.fit"
