@@ -567,6 +567,7 @@ function check_compressed_file_type()
 {
     local filename=$1
     local type="$2"
+    local file_type
 
     if [ ! -f $filename ]
     then
@@ -574,12 +575,16 @@ function check_compressed_file_type()
         cleanup_and_return_err
     fi
 
-    file -L $filename | grep "gzip compressed data" &> /dev/null
-    if test $? == 0
-    then
+    file_type=$( file -L $filename )
+    if echo "$file_type" | grep -q "gzip compressed data" ; then
         local tmp=`mktemp`
         tmp_files+=($tmp)
         cat $filename | gunzip > $tmp
+        filename=$tmp
+    elif echo "$file_type" | grep -q "Zstandard compressed data" ; then
+        local tmp=`mktemp`
+        tmp_files+=($tmp)
+        zstdcat $filename > $tmp
         filename=$tmp
     fi
     check_file_type $filename "$type"
