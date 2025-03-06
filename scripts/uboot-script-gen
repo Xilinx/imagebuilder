@@ -309,6 +309,43 @@ function add_device_tree_cpupools()
     done
 }
 
+function parse_domain_caps()
+{
+    local caps_str="$1"
+    local caps=0
+
+    for x in $( echo $caps_str | sed 's/|/ /g' | tr '[:upper:]' '[:lower:]' )
+    do
+        case "$x" in
+        none)
+            caps=$(( caps | 0 ))
+            ;;
+        control)
+            caps=$(( caps | 0x1 ))
+            ;;
+        hardware)
+            caps=$(( caps | 0x2 ))
+            ;;
+        xenstore)
+            caps=$(( caps | 0x4 ))
+            ;;
+        dom0|domain0)
+            caps=$(( caps | 0x7 ))
+            ;;
+        [0-9]*|0x[0-9a-fA-f]*)
+            caps=$(( caps | $x ))
+            ;;
+        *)
+            return 1
+            ;;
+        esac
+    done
+
+    echo "$caps"
+
+    return 0
+}
+
 function xen_device_tree_editing()
 {
     dt_set "/chosen" "#address-cells" "hex" "0x2"
@@ -394,6 +431,16 @@ function xen_device_tree_editing()
         if test -n "${DOMU_MAPTRACK_FRAMES[i]}"
         then
             dt_set "/chosen/domU$i" "max_maptrack_frames" "int" "${DOMU_MAPTRACK_FRAMES[i]}"
+        fi
+        if test -n "${DOMU_CAPS[i]}"
+        then
+            local caps
+
+            if ! caps=$( parse_domain_caps ${DOMU_CAPS[i]} ) ; then
+                echo "Invalid DOMU_CAPS[$i] \"${DOMU_CAPS[i]}\""
+                cleanup_and_return_err
+            fi
+            dt_set "/chosen/domU$i" "capabilities" "int" "$caps"
         fi
 
         if test -n "${DOMU_SHARED_MEM[i]}"
