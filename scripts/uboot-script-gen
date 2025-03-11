@@ -468,6 +468,67 @@ function device_tree_editing()
     fi
 }
 
+function fill_reserved_spaces_from_dtb()
+{
+    if [ ! -f $DEVICE_TREE ]
+    then
+        echo "File $DEVICE_TREE doesn't exist, exiting";
+        cleanup_and_return_err
+    fi
+
+    # Check if reserved-memory node exists
+    if ! fdtget -l $DEVICE_TREE /reserved-memory &> /dev/null
+    then
+        return
+    fi
+
+    local addr_cells=$(fdtget -t x $DEVICE_TREE /reserved-memory '#address-cells' 2> /dev/null\
+                    || fdtget -t x $DEVICE_TREE / '#address-cells' 2> /dev/null)
+    local size_cells=$(fdtget -t x $DEVICE_TREE /reserved-memory '#size-cells' 2> /dev/null\
+                    || fdtget -t x $DEVICE_TREE / '#size-cells' 2> /dev/null)
+
+    if [ -z "$addr_cells" ] || [ -z "$size_cells" ]; then
+        echo "Could not find #address-cells or #size-cells properties for reserved-memory node in $DEVICE_TREE"
+        cleanup_and_return_err
+    fi
+
+    for node in $(fdtget -l $DEVICE_TREE /reserved-memory); do
+        local reg_values=($(fdtget -t x $DEVICE_TREE /reserved-memory/$node reg))
+        local i=0
+        for ((i=0; i<${#reg_values[@]}; i+=addr_cells+size_cells)); do
+            local addr=0
+            local size=0
+            local j=0
+
+            for ((j=0; j<addr_cells; j++)); do
+                addr=$((addr << 32 | 0x${reg_values[i+j]}))
+            done
+
+            for ((j=0; j<size_cells; j++)); do
+                size=$((size << 32 | 0x${reg_values[i+addr_cells+j]}))
+            done
+
+            addr=$(printf "0x%X" $addr)
+            size=$(printf "0x%X" $size)
+        done
+
+        # Add the reserved space to the list and avoid duplicates
+        local duplicate=0
+        for reserved_space in "${RESERVED_MEM_SPACES[@]}"; do
+            local reserved_start=${reserved_space%,*}
+            local reserved_size=${reserved_space#*,}
+
+            if [[ $addr -eq $reserved_start ]] && [[ $size -eq $reserved_size ]]; then
+                duplicate=1
+                break
+            fi
+        done
+        if [ $duplicate -eq 0 ]; then
+            RESERVED_MEM_SPACES+=("${addr},${size}")
+        fi
+    done
+}
+
 # Read effective image size from a header, which may be larger than the filesize
 # due to noload sections, e.g. bss.
 function get_image_size()
@@ -505,9 +566,24 @@ function add_size()
         size=${image_size}
     fi
 
-    memaddr=$(( $memaddr + $size + $offset - 1))
-    memaddr=$(( $memaddr & ~($offset - 1) ))
-    memaddr=`printf "0x%X\n" $memaddr`
+    # Try to place the file at the first available space...
+    local new_memaddr=$(( (memaddr + size + offset - 1) & ~(offset - 1) ))
+
+    # ...then check if it overlaps with any reserved space
+    for reserved_space in "${RESERVED_MEM_SPACES[@]}"; do
+        local reserved_start=${reserved_space%,*}
+        local reserved_size=${reserved_space#*,}
+        local reserved_end=$((reserved_start + reserved_size))
+
+        if [[ $new_memaddr -le $reserved_end ]] && \
+           [[ $((new_memaddr + size)) -ge $reserved_start ]]; then
+            # In that case, place the file at the next available space
+            # after the reserved one
+            new_memaddr=$(( (reserved_end + offset) & ~(offset - 1) ))
+        fi
+    done
+
+    memaddr=$(printf "0x%X\n" $new_memaddr)
     filesize=$size
 }
 
@@ -1372,6 +1448,8 @@ uboot_addr=$memaddr
 # 2MB are enough for a uboot script
 memaddr=$(( $memaddr + $offset ))
 memaddr=`printf "0x%X\n" $memaddr`
+
+fill_reserved_spaces_from_dtb
 
 if test "$os" = "xen"
 then
