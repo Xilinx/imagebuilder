@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# uses:
+# DOMU_VCPU_HARD_AFFINITY
+function xen_dt_domu_add_vcpu_nodes()
+{
+    # $1 - dt path
+    local path=$1
+    # $2 - domain number
+    local dom_num=$2
+    # $3 - number of vcpus for the domain
+    local vcpus=$3
+    local hard_affinity=""
+    local gen_vcpu=""
+
+    for (( vcpu=0; vcpu<${vcpus}; vcpu++ ))
+    do
+        gen_vcpu=""
+        if test "${DOMU_VCPU_HARD_AFFINITY[$dom_num,$vcpu]}"
+        then
+            hard_affinity=${DOMU_VCPU_HARD_AFFINITY[$dom_num,$vcpu]}
+            gen_vcpu="1"
+        fi
+
+        if test -z "$gen_vcpu"
+        then
+            continue
+        fi
+
+        dt_mknode "${path}" "vcpu$vcpu"
+        dt_set "${path}/vcpu$vcpu" "compatible" "str_a" "xen,vcpu"
+        dt_set "${path}/vcpu$vcpu" "id" "int"  "$vcpu"
+
+        if test -n "$hard_affinity"
+        then
+            dt_set "${path}/vcpu$vcpu" "hard-affinity" "str" "$hard_affinity"
+        fi
+    done
+}

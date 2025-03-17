@@ -186,6 +186,17 @@ Where:
 
 - DOMU_VCPUS[number] is the number of vcpus for the VM, default 1
 
+- DOMU_VCPU_HARD_AFFINITY[number,vcpu] optional, is the A string
+  specifying the hard affinity configuration for the VM vCPU(vcpu):
+  a comma-separated list of pCPUs or ranges of pCPUs is used.
+  Ranges are hyphen-separated intervals (such as `0-4`) and are inclusive
+  on both sides. The numbers refer to logical pCPU ids. Below is an example:
+```
+      DOMU_VCPUS[number]=2
+      DOMU_VCPU_HARD_AFFINITY[number,0]="0-2"
+      DOMU_VCPU_HARD_AFFINITY[number,1]="3"
+```
+
 - DOMU_COLORS[number] specifies the colors (cache coloring) to be used
   for the domain and is in the format startcolor-endcolor
 
