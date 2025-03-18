@@ -1484,6 +1484,11 @@ device_tree_editing $device_tree_addr
 # disable device tree reloation
 echo "setenv fdt_high 0xffffffffffffffff" >> $UBOOT_SOURCE
 
+if test "$DBG_FDT_PRINT_CHOSEN"
+then
+    echo "fdt print /chosen" >> $UBOOT_SOURCE
+fi
+
 # append extra u-boot commands (fixups) to script before boot command
 if test "$APPEND_EXTRA_CMDS"
 then

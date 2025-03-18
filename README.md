@@ -398,3 +398,11 @@ disk\_image supports these additional parameters on the config file:
 disk_image also generates on the fly a xl config file for each domU and
 adds them to the dom0 rootfs partition under /etc/xen. It makes it
 easier to start those domUs from dom0.
+
+
+## Debug
+
+This section defines config file debug options
+
+- DBG_FDT_PRINT_CHOSEN specifies that U-Boot script command to print DT "chosen"
+  node will be added to the boot script.
