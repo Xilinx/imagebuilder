@@ -271,6 +271,22 @@ Where:
   PL011 UART for dom0less domU or not. If set to 1 - enable, 0 - disable
   (default, in which case SBSA UART emulation is enabled).
 
+- DOMU_CAPS[number] = "string" or "hex" (optional)
+  A "|"-concatentated string of capabilities:
+    - control
+    - hardware
+    - xenstore
+    - dom0 (All of the above)
+    - none
+
+  e.g. "control|hardware"
+
+  Or a numeric bitwise flags to specify domain capabilities:
+  0: None
+  1: Control
+  2: Hardware
+  4: Xenstore
+
 - LINUX is optional but specifies the Linux kernel for when Xen is NOT
   used.  To enable this set any LINUX\_\* variables and do NOT set the
   XEN variable.
