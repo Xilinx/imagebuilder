@@ -315,6 +315,15 @@ function xen_device_tree_editing()
     dt_set "/chosen" "#size-cells" "hex" "0x2"
     dt_set "/chosen" "xen,xen-bootargs" "str" "$XEN_CMD"
 
+    if test -n "$XEN_POLICY" && test "$xen_policy_addr" != "-"
+    then
+        local node_name="xen-policy@${xen_policy_addr#0x}"
+
+        dt_mknode "/chosen" "$node_name"
+        dt_set "/chosen/$node_name" "compatible" "str_a" "xen,xsm-policy xen,multiboot-module multiboot,module"
+        dt_set "/chosen/$node_name" "reg" "hex" "$(split_addr_size $xen_policy_addr $xen_policy_size)"
+    fi
+
     if test "$DOM0_KERNEL"
     then
         local node_name="dom0@${dom0_kernel_addr#0x}"
@@ -900,6 +909,15 @@ xen_file_loading()
     kernel_addr=$memaddr
     kernel_path=$XEN
     load_file "$XEN" "host_kernel"
+
+    xen_policy_addr="-"
+    if test -n "$XEN_POLICY"
+    then
+        check_file_type "${XEN_POLICY}" "SE Linux policy"
+        xen_policy_addr=$memaddr
+        load_file "$XEN_POLICY" "xen_policy"
+        xen_policy_size=$filesize
+    fi
 }
 
 linux_file_loading()
@@ -939,6 +957,22 @@ bitstream_load_and_config()
 
 create_its_file_xen()
 {
+    if test -n "$XEN_POLICY" && test "$xen_policy_addr" != "-"
+    then
+        cat >> "$its_file" <<- EOF
+        xen_policy {
+            description = "Xen XSM policy binary";
+            data = /incbin/("$XEN_POLICY");
+            type = "firmware";
+            arch = "arm64";
+            os = "linux";
+            compression = "none";
+            load = <$xen_policy_addr>;
+            $fit_algo
+        };
+	EOF
+    fi
+
     if test "$DOM0_KERNEL"
     then
         if test "$ramdisk_addr" != "-"

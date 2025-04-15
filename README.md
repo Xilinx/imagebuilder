@@ -91,6 +91,8 @@ Where:
 - XEN specifies the Xen hypervisor binary to load. Note that it has to
   be a regular Xen binary, not a u-boot binary.
 
+- XEN_POLICY specifies the Xen hypervisor XSM policy binary to load.
+
 - XEN_COLORS specifies the colors (cache coloring) to be used for Xen
   and is in the format startcolor-endcolor
 
