@@ -356,6 +356,8 @@ Where:\
    can only be used  in combination with the -k option.  This adds the
    public key into the dtb.  Then one can add this dtb back into the
    u-boot bin or elf.\
+-s addresses and sizes are calculated dynamically from U-Boot, hence
+   binaries don't need to be available at the time of invocation.\
 
 ### Signed FIT images
 
