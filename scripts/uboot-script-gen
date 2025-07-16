@@ -903,7 +903,7 @@ function xen_config()
 
     if [ -z "$DOM0_CMD" ]
     then
-        DOM0_CMD="console=hvc0 earlycon=xen earlyprintk=xen clk_ignore_unused"
+        DOM0_CMD="console=hvc0 earlycon=xenboot earlyprintk clk_ignore_unused"
     fi
     if [[ ! $DOM0_CMD =~ root= ]]
     then
