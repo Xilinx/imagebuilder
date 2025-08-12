@@ -33,10 +33,12 @@ BOOT_CMD="booti"
 
 DEVICE_TREE="mpsoc.dtb"
 XEN="xen"
+XEN_LOAD="ext4load mmc 0:1"
 XEN_CMD="console=dtuart dtuart=serial0 dom0_mem=1G dom0_max_vcpus=1 bootscrub=0 vwfi=native sched=null"
 PASSTHROUGH_DTS_REPO="git@github.com:Xilinx/xen-passthrough-device-trees.git device-trees-2021.2/zcu102"
 DOM0_KERNEL="Image-dom0"
 DOM0_CMD="console=hvc0 earlycon=xen earlyprintk=xen clk_ignore_unused"
+DOM0_LOAD="ext4load mmc 2:1"
 DOM0_RAMDISK="dom0-ramdisk.cpio"
 DOM0_MEM=1024
 DOM0_VCPUS=1
@@ -46,11 +48,13 @@ DT_OVERLAY[0]="host_dt_overlay.dtbo"
 
 NUM_DOMUS=2
 DOMU_KERNEL[0]="zynqmp-dom1/Image-domU"
+DOMU_LOAD[0]="ext4load mmc 4:1"
 DOMU_PASSTHROUGH_PATHS[0]="/axi/ethernet@ff0e0000 /axi/serial@ff000000"
 DOMU_CMD[0]="console=ttyPS0 earlycon console=ttyPS0,115200 clk_ignore_unused rdinit=/sbin/init root=/dev/ram0 init=/bin/sh"
 DOMU_RAMDISK[0]="zynqmp-dom1/domU-ramdisk.cpio"
 DOMU_COLORS[0]="6-14"
 DOMU_KERNEL[1]="zynqmp-dom2/Image-domU"
+DOMU_LOAD[1]="ext4load mmc 5:1"
 DOMU_CMD[1]="console=ttyAMA0 clk_ignore_unused rdinit=/sbin/init root=/dev/ram0 init=/bin/sh"
 DOMU_RAMDISK[1]="zynqmp-dom2/domU-ramdisk.cpio"
 DOMU_MEM[1]=512
@@ -77,7 +81,9 @@ Where:
 - LOAD_CMD specifies the u-boot command used to load the binaries. This
   can be left out of the config and be (over)written by the -t CLI
   argument. It has to be set either in the config file or CLI argument
-  though.
+  though. This is optional when XEN is set as user can provide specific
+  options (ie XEN_LOAD, DOM0_LOAD, DOMU_LOAD) to load Xen, Dom0 and DomU
+  binaries.
 
 - BOOT_CMD specifies the u-boot command used to boot the binaries.
   By default, it is 'booti'. The acceptable values are 'booti', 'bootm',
@@ -99,6 +105,9 @@ Where:
 - XEN_CMD specifies the command line arguments used for Xen.  If not
   set, the default one will be used.
 
+- XEN_LOAD specifies the command to load XEN and DEVICE_TREE. If not set,
+  LOAD_CMD will be used.
+
 - XEN_STATIC_HEAP="baseaddr1 size1 ... baseaddrN sizeN"
   if specified, indicates the host physical address regions
   [baseaddr, baseaddr + size) to be reserved as Xen static heap.
@@ -108,6 +117,9 @@ Where:
   this is specified, then DOMU_PASSTHROUGH_PATHS[number] need to be specified.
   uboot-script-gen will compile the partial device trees which have
   been specified in DOMU_PASSTHROUGH_PATHS[number].
+
+- DOM0_LOAD specifies the command to load DOM0_KERNEL and DOM0_RAMDISK. If not
+  set, LOAD_CMD will be used.
 
 - DOM0_KERNEL specifies the Dom0 kernel file to load.
   For dom0less configurations, the parameter is optional.
@@ -158,6 +170,10 @@ Where:
 - DOMU_CMD[number] specifies the command line arguments for DomU's Linux
   kernel. If not set and DOMU_VPL011[number] is not set to 0, then
   "console=ttyAMA0" is used.
+
+- DOMU_LOAD[number] specifies the command to load DOMU_KERNEL[number],
+  DOMU_RAMDISK[number] and DOMU_PASSTHROUGH_DTB[number]. If not set, then
+  LOAD_CMD is used.
 
 - DOMU_RAMDISK[number] specifies the DomU ramdisk to use.
 

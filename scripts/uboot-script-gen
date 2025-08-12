@@ -737,6 +737,7 @@ function load_file()
 {
     local filename=$1
     local fit_scr_name=$2
+    local load_cmd=$3
 
     local absolute_path="$(realpath --no-symlinks $filename)"
     local base="$(realpath $PWD)"/
@@ -748,10 +749,10 @@ function load_file()
         add_size_from_file $filename
     else
         if test "$CALC"; then
-            echo "$LOAD_CMD \${memaddr} ${prepend_path:+$prepend_path/}$relative_path" >> $UBOOT_SOURCE
+            echo "$load_cmd \${memaddr} ${prepend_path:+$prepend_path/}$relative_path" >> $UBOOT_SOURCE
             add_size_calculate $fit_scr_name
         else
-            echo "$LOAD_CMD $memaddr ${prepend_path:+$prepend_path/}$relative_path" >> $UBOOT_SOURCE
+            echo "$load_cmd $memaddr ${prepend_path:+$prepend_path/}$relative_path" >> $UBOOT_SOURCE
             add_size_from_file $filename
         fi
     fi
@@ -830,10 +831,10 @@ function check_compressed_file_type()
 
 function find_root_dev()
 {
-
-    local dev=${LOAD_CMD%:*}
+    local load_cmd="$1"
+    local dev=${load_cmd%:*}
     dev=${dev##* }
-    local par=${LOAD_CMD#*:}
+    local par=${load_cmd#*:}
 
     if [ -z "$dev" ] || [ -z "$par" ]
     then
@@ -844,10 +845,10 @@ function find_root_dev()
 
     par=$((par + 1))
 
-    if [[ $LOAD_CMD =~ mmc ]]
+    if [[ $load_cmd =~ mmc ]]
     then
         root_dev="/dev/mmcblk${dev}p${par}"
-    elif [[ $LOAD_CMD =~ scsi ]]
+    elif [[ $load_cmd =~ scsi ]]
     then
         # converts number to a scsi device character
         dev=$((dev + 97))
@@ -925,7 +926,7 @@ function xen_config()
         then
             DOM0_CMD="$DOM0_CMD root=/dev/ram0"
         else
-            find_root_dev
+            find_root_dev "$DOM0_LOAD"
             # $root_dev is set by find_root_dev
             DOM0_CMD="$DOM0_CMD root=$root_dev"
         fi
@@ -973,7 +974,7 @@ function linux_config()
         then
             LINUX_CMD="$LINUX_CMD root=/dev/ram0"
         else
-            find_root_dev
+            find_root_dev "$LOAD_CMD"
             # $root_dev is set by find_root_dev
             LINUX_CMD="$LINUX_CMD root=$root_dev"
         fi
@@ -1003,11 +1004,22 @@ generate_uboot_images()
 
 xen_file_loading()
 {
+    if test -z "$DOM0_LOAD"
+    then
+        if test "$LOAD_CMD"
+        then
+            DOM0_LOAD="$LOAD_CMD"
+        else
+            echo "Neither DOM0_LOAD nor LOAD_CMD is specified"
+            exit 1
+        fi
+    fi
+
     if test "$DOM0_KERNEL"
     then
         check_compressed_file_type $DOM0_KERNEL "executable\|uImage"
         dom0_kernel_addr=$memaddr
-        load_file $DOM0_KERNEL "dom0_linux"
+        load_file $DOM0_KERNEL "dom0_linux" "$DOM0_LOAD"
         dom0_kernel_size=$filesize
     fi
     if test "$DOM0_RAMDISK"
@@ -1015,7 +1027,7 @@ xen_file_loading()
         check_compressed_file_type $DOM0_RAMDISK "cpio archive"
         ramdisk_addr=$memaddr
         ramdisk_path=$DOM0_RAMDISK
-        load_file "$DOM0_RAMDISK" "dom0_ramdisk"
+        load_file "$DOM0_RAMDISK" "dom0_ramdisk" "$DOM0_LOAD"
         ramdisk_size=$filesize
     else
         ramdisk_addr="-"
@@ -1024,6 +1036,16 @@ xen_file_loading()
     i=0
     while test $i -lt $NUM_DOMUS
     do
+        if test -z "${DOMU_LOAD[$i]}"
+        then
+            if test "$LOAD_CMD"
+            then
+                DOMU_LOAD[$i]="$LOAD_CMD"
+            else
+                echo "Neither DOMU_LOAD[] nor LOAD_CMD is specified"
+                exit 1
+            fi
+        fi
         if test "${DOMU_ROOTFS[$i]}" || test "${DOMU_NOBOOT[$i]}"
         then
             if test -z "${DOMU_NOBOOT[$i]}"
@@ -1042,20 +1064,20 @@ xen_file_loading()
 
         check_compressed_file_type ${DOMU_KERNEL[$i]} "executable\|uImage"
         domU_kernel_addr[$i]=$memaddr
-        load_file ${DOMU_KERNEL[$i]} "domU${i}_kernel"
+        load_file ${DOMU_KERNEL[$i]} "domU${i}_kernel" "${DOMU_LOAD[$i]}"
         domU_kernel_size[$i]=$filesize
         if test "${DOMU_RAMDISK[$i]}"
         then
             check_compressed_file_type ${DOMU_RAMDISK[$i]} "cpio archive"
             domU_ramdisk_addr[$i]=$memaddr
-            load_file ${DOMU_RAMDISK[$i]} "domU${i}_ramdisk"
+            load_file ${DOMU_RAMDISK[$i]} "domU${i}_ramdisk" "${DOMU_LOAD[$i]}"
             domU_ramdisk_size[$i]=$filesize
         fi
         if test "${DOMU_PASSTHROUGH_DTB[$i]}"
         then
             check_compressed_file_type ${DOMU_PASSTHROUGH_DTB[$i]} "Device Tree Blob"
             domU_passthrough_dtb_addr[$i]=$memaddr
-            load_file ${DOMU_PASSTHROUGH_DTB[$i]} "domU${i}_fdt"
+            load_file ${DOMU_PASSTHROUGH_DTB[$i]} "domU${i}_fdt" "${DOMU_LOAD[$i]}"
             domU_passthrough_dtb_size[$i]=$filesize
         fi
         i=$(( $i + 1 ))
@@ -1070,9 +1092,20 @@ xen_file_loading()
         generate_uboot_images
     fi
 
+    if test -z "$XEN_LOAD"
+    then
+        if test "$LOAD_CMD"
+        then
+            XEN_LOAD="$LOAD_CMD"
+        else
+            echo "Neither XEN_LOAD nor LOAD_CMD is specified"
+            exit 1
+        fi
+    fi
+
     kernel_addr=$memaddr
     kernel_path=$XEN
-    load_file "$XEN" "host_kernel"
+    load_file "$XEN" "host_kernel" "$XEN_LOAD"
 
     xen_policy_addr="-"
     if test -n "$XEN_POLICY"
@@ -1518,12 +1551,6 @@ then
     FIT="${UBOOT_SOURCE%.source}.fit"
 fi
 
-if test ! "$LOAD_CMD"
-then
-    echo "LOAD_CMD not set, either specify it in the config or set it with the -t option"
-    exit 1
-fi
-
 if test ! "$BOOT_CMD"
 then
     BOOT_CMD="booti"
@@ -1543,6 +1570,11 @@ then
 elif test "$LINUX"
 then
     os="linux"
+    if test ! "$LOAD_CMD"
+    then
+        echo "LOAD_CMD not set, either specify it in the config or set it with the -t option"
+        exit 1
+    fi
     linux_config
 else
     echo "Neither a Xen or Linux kernel is specified, exiting"
@@ -1691,7 +1723,7 @@ fi
 
 check_file_type $DEVICE_TREE "Device Tree Blob"
 device_tree_addr=$memaddr
-load_file $DEVICE_TREE "host_fdt"
+load_file $DEVICE_TREE "host_fdt" "$XEN_LOAD"
 bitstream_load_and_config  # bitstream is loaded last but used first
 device_tree_editing $device_tree_addr
 
