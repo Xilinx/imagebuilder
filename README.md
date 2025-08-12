@@ -92,7 +92,10 @@ Where:
   DTB are stored in 'host_kernel_addr' and 'host_fdt_addr' u-boot
   env variables respectively, to be used manually when booting.
 
-- DEVICE_TREE specifies the DTB file to load.
+- DEVICE_TREE specifies the DTB file to load. If not set, then $fdtcontroladdr
+  is used as the address of the DTB loaded by u-boot. If user does not set this
+  option, then '-s' should be provided to ensure that addresses and sizes are
+  calculated dynamically by uboot.
 
 - XEN specifies the Xen hypervisor binary to load. Note that it has to
   be a regular Xen binary, not a u-boot binary.

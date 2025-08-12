@@ -591,7 +591,7 @@ function device_tree_editing()
 
 function fill_reserved_spaces_from_dtb()
 {
-    if [ ! -f $DEVICE_TREE ]
+    if test ! -f $DEVICE_TREE || test -z "$DEVICE_TREE"
     then
         if test "$CALC"; then
             return
@@ -1674,6 +1674,16 @@ fi
 
 rm -f $UBOOT_SOURCE $UBOOT_SCRIPT
 
+if test -z "$DEVICE_TREE"
+then
+    if test -z "$CALC"
+    then
+       echo "DEVICE_TREE is unset and -s is not specified"
+       exit 1
+    fi
+    echo "setenv host_fdt_addr \${fdtcontroladdr}" >> $UBOOT_SOURCE
+fi
+
 if test "$FIT"
 then
     echo 'fit_addr=$fileaddr' >>  $UBOOT_SOURCE
@@ -1721,9 +1731,13 @@ then
     done
 fi
 
-check_file_type $DEVICE_TREE "Device Tree Blob"
-device_tree_addr=$memaddr
-load_file $DEVICE_TREE "host_fdt" "$XEN_LOAD"
+if test "$DEVICE_TREE"
+then
+    check_file_type $DEVICE_TREE "Device Tree Blob"
+    device_tree_addr=$memaddr
+    load_file $DEVICE_TREE "host_fdt" "$XEN_LOAD"
+fi
+
 bitstream_load_and_config  # bitstream is loaded last but used first
 device_tree_editing $device_tree_addr
 
@@ -1751,8 +1765,11 @@ then
     fi
 else
     # skip boot command but store load addresses to be used later
-    echo "setenv host_kernel_addr $kernel_addr" >> $UBOOT_SOURCE
-    echo "setenv host_fdt_addr $device_tree_addr" >> $UBOOT_SOURCE
+    if test -z "$CALC"
+    then
+        echo "setenv host_kernel_addr $kernel_addr" >> $UBOOT_SOURCE
+        echo "setenv host_fdt_addr $device_tree_addr" >> $UBOOT_SOURCE
+    fi
 fi
 
 if test "$FIT"
