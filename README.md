@@ -322,6 +322,10 @@ Where:
   1: Control
   2: Hardware
   4: Xenstore
+  
+- DOMU_VIRTIO_PCI[number] can be set to 0 or 1. Default is unset. If set to 0,
+  it enables virtio-pci support for the domain. If set to 1, virtio-pci is
+  enabled  using grants. See Xen documentation about dom0less "virtio-pci" option.
 
 - DOMU_TRAP_UNMAP[number] is an Arm-only option that configures handling of
   domain accesses to unmapped address ranges. It is optional and has no effect
