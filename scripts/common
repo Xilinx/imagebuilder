@@ -142,8 +142,8 @@ function compile_merge_partial_dts()
     do
         if test -z "${DOMU_PASSTHROUGH_PATHS[$i]}"
         then
-            echo "DOMU_PASSTHROUGH_PATHS[$i] is not defined"
-            return 1
+            echo "DOMU_PASSTHROUGH_PATHS for domain $i is not defined. Skipping..."
+            return 0
         fi
 
         if test -z "$repo"

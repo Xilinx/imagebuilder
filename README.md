@@ -116,8 +116,8 @@ Where:
   [baseaddr, baseaddr + size) to be reserved as Xen static heap.
 
 - PASSTHROUGH_DTS_REPO specifies the git repository and/or the directory
-  which contains the partial device trees. This is optional. However, if
-  this is specified, then DOMU_PASSTHROUGH_PATHS[number] need to be specified.
+  which contains the partial device trees. This is optional. If
+  this is specified, then DOMU_PASSTHROUGH_PATHS[number] can be defined.
   uboot-script-gen will compile the partial device trees which have
   been specified in DOMU_PASSTHROUGH_PATHS[number].
 
@@ -154,8 +154,8 @@ Where:
 
 - LOPPER_PATH specifies the path to lopper.py script, the main script in the
   Lopper repository (https://github.com/devicetree-org/lopper). This is
-  optional. However, if this is specified, then DOMU_PASSTHROUGH_PATHS[number]
-  needs to be specified. uboot-script-gen will invoke lopper to generate the
+  optional. If this is specified, then DOMU_PASSTHROUGH_PATHS[number]
+  can be specified. uboot-script-gen will invoke lopper to generate the
   partial device trees for devices which have been listed in
   DOMU_PASSTHROUGH_PATHS[number]. This option is currently in experimental state
   as the corresponding lopper changes are still in an early support state.
