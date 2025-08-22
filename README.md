@@ -259,11 +259,12 @@ Where:
   get mapped at guest address GPA in domU (otherwise it will come from Xen heap)
   and the memory of size will be reserved to be shared memory. The shared memory
   is used between two dom0less domUs.
-
   Below is an example:
+  ```
   NUM_DOMUS=2
   DOMU_SHARED_MEM[0]="my-shared-mem-0 0x50000000 0x6000000 0x10000000"
   DOMU_SHARED_MEM[1]="my-shared-mem-0 0x50000000 0x6000000 0x10000000"
+  ```
 
   This static shared memory region is identified as "my-shared-mem-0", host
   physical address starting at 0x50000000 of 256MB will be reserved to be
@@ -427,14 +428,16 @@ Signed FIT images are a way to sign images with asymmetrical keys. While
 making the FIT image, images are signed with a private key; then during
 boot U-Boot uses a public key in its control dtb to verify the 
 signatures. Some of the U-Boot config options needed are:
-CONFIG_FIT_SIGNATURE=y\
-CONFIG_RSA=y\
-CONFIG_LEGACY_IMAGE_FORMAT=n\
+```
+CONFIG_FIT_SIGNATURE=y
+CONFIG_RSA=y
+CONFIG_LEGACY_IMAGE_FORMAT=n
+```
 
 Once U-boot is built, then take the control dtb, supply it to
 Imagebuilder when building a signed image, then use it when booting.
 For generating the keys and other documentation, see:\
-u-boot/doc/uImage.FIT/signature.txt\
+u-boot/doc/uImage.FIT/signature.txt
 
 
 ## scripts/disk\_image
