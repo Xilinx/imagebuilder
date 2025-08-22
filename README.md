@@ -301,6 +301,10 @@ Where:
   1: Control
   2: Hardware
   4: Xenstore
+  
+- DOMU_VIRTIO_PCI[number] can be set to 0 or 1. Default is unset. If set to 0,
+  it enables virtio-pci support for the domain. If set to 1, virtio-pci is
+  enabled  using grants. See Xen documentation about dom0less "virtio-pci" option.
 
 - DOMU_VIOMMU[number] specifies whether to enable support for virtual IOMMU for
   dom0less domU or not. If set to 1 - enable, 0 - disable (default case).

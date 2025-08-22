@@ -471,6 +471,14 @@ function xen_device_tree_editing()
             dt_set "/chosen/domU$i" "xen,enhanced" "str" "no-xenstore"
         fi
 
+        if [ "${DOMU_VIRTIO_PCI[$i]}" == 0 ]
+        then
+            dt_set "/chosen/domU$i" "virtio-pci" "str" "enabled"
+        elif [ "${DOMU_VIRTIO_PCI[$i]}" == 1 ]
+        then
+            dt_set "/chosen/domU$i" "virtio-pci" "str" "grants"
+        fi
+
         if test -n "${DOMU_GRANT_VER[i]}"
         then
             dt_set "/chosen/domU$i" "max_grant_version" "int" "${DOMU_GRANT_VER[i]}"
