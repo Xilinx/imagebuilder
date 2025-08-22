@@ -114,11 +114,11 @@ function compile_merge_partial_dts()
             tmp=`mktemp -d`
             tmp_dirs+=($tmp)
 
-            echo "Cloning git repo \"$git_repo\""
+            echo "Cloning git repo \"$repo\""
             git clone "$repo" $tmp
             if test $? -ne 0
             then
-                echo "Error occurred while cloning \"$git_repo\""
+                echo "Error occurred while cloning \"$repo\""
                 return 1
             fi
 
