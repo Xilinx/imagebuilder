@@ -736,6 +736,12 @@ function load_file()
     local base="$(realpath $PWD)"/
     local relative_path=${absolute_path#"$base"}
 
+    # Default to LOAD_CMD if not specified
+    if test -z "${load_cmd}"
+    then
+        load_cmd="${LOAD_CMD}"
+    fi
+
     if test "$FIT"
     then
         echo "imxtract \$fit_addr $fit_scr_name $memaddr" >> $UBOOT_SOURCE
