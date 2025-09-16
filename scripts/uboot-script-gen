@@ -537,6 +537,16 @@ function xen_device_tree_editing()
             dt_set "/chosen/domU$i" "colors" "hex" "$(printf "0x%x" $bitcolors)"
         fi
 
+        if test "${DOMU_MALI_AW[i]}"
+        then
+            mali_aw=${DOMU_MALI_AW[i]}
+            if [ "$mali_aw" -lt 0 ] || [ "$mali_aw" -gt 15 ]; then
+                echo "DOMU_MALI_AW[$i] ($mali_aw) is out of range [0,15]"
+                cleanup_and_return_err
+            fi
+            dt_set "/chosen/domU$i" "mali-aw" "hex" "$(printf "0x%x" $mali_aw)"
+        fi
+
         xen_dt_domu_add_vcpu_nodes "/chosen/domU$i" $i ${DOMU_VCPUS[$i]}
 
         if test "${DOMU_STATIC_EVTCHNS[$i]}"
