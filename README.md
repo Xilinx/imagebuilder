@@ -208,6 +208,10 @@ Where:
 
 - DOMU_MEM[number] is the amount of memory for the VM in MB, default 512MB
 
+- DOMU_MALI_AW[number] specifies the Access Window (AW) ID assigned
+  to the domain for GPU virtualization. Valid values range from 0 to 15. This
+  binding is required for associating a VM with a GPU partition in Mali-G78AE.
+
 - DOMU_VCPUS[number] is the number of vcpus for the VM, default 1
 
 - DOMU_VCPU_HARD_AFFINITY[number,vcpu] optional, is the A string
