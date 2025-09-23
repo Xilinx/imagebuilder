@@ -1698,16 +1698,6 @@ fi
 
 rm -f $UBOOT_SOURCE $UBOOT_SCRIPT
 
-if test -z "$DEVICE_TREE"
-then
-    if test -z "$CALC"
-    then
-       echo "DEVICE_TREE is unset and -s is not specified"
-       exit 1
-    fi
-    echo "setenv host_fdt_addr \${fdtcontroladdr}" >> $UBOOT_SOURCE
-fi
-
 if test "$FIT"
 then
     echo 'fit_addr=$fileaddr' >>  $UBOOT_SOURCE
@@ -1724,6 +1714,21 @@ uboot_addr=$memaddr
 # 2MB are enough for a uboot script
 memaddr=$(( $memaddr + $offset ))
 memaddr=`printf "0x%X\n" $memaddr`
+
+if test -z "$DEVICE_TREE"
+then
+    if test -z "$CALC"
+    then
+       echo "DEVICE_TREE is unset and -s is not specified"
+       exit 1
+    fi
+    echo "setenv host_fdt_addr $memaddr" >> $UBOOT_SOURCE
+    echo "fdt addr \${fdtcontroladdr}" >> $UBOOT_SOURCE
+    echo "fdt move \${fdtcontroladdr} \${host_fdt_addr}" >> $UBOOT_SOURCE
+    memaddr=$(( $memaddr + $offset ))
+    memaddr=`printf "0x%X\n" $memaddr`
+fi
+
 if test "$CALC"
 then
     echo "setenv memaddr $memaddr" >> $UBOOT_SOURCE
