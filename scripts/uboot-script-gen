@@ -428,6 +428,8 @@ function xen_device_tree_editing()
         fi
     fi
 
+    xen_dt_build_evtchns_map
+
     i=0
     while test $i -lt $NUM_DOMUS
     do
@@ -511,6 +513,11 @@ function xen_device_tree_editing()
         fi
 
         xen_dt_domu_add_vcpu_nodes "/chosen/domU$i" $i ${DOMU_VCPUS[$i]}
+
+        if test "${DOMU_STATIC_EVTCHNS[$i]}"
+        then
+            xen_dt_domu_add_evtchns "/chosen/domU$i" "$i" "${DOMU_STATIC_EVTCHNS[$i]}"
+        fi
 
         add_device_tree_kernel "/chosen/domU$i" "domU${i}_kernel" ${domU_kernel_addr[$i]} ${domU_kernel_size[$i]} "${DOMU_CMD[$i]}"
         if test "${domU_ramdisk_addr[$i]}"

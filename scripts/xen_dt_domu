@@ -37,3 +37,106 @@ function xen_dt_domu_add_vcpu_nodes()
         fi
     done
 }
+
+declare -A EVTCHN_ENDPOINT_TO_PHANDLE_MAP
+
+function xen_dt_build_evtchns_map()
+{
+    local def
+    local local_dom_idx
+    local local_port remote_dom_idx remote_port
+    local new_phandle
+    local local_key remote_key
+
+    for (( local_dom_idx=0; local_dom_idx<$NUM_DOMUS; local_dom_idx++ ))
+    do
+        local evtchn_str=${DOMU_STATIC_EVTCHNS[$local_dom_idx]}
+        if test -z "$evtchn_str"
+        then
+            continue
+        fi
+
+        IFS=';' read -ra evtchn_defs <<< "$evtchn_str"
+
+        # Loop over each definition and process both endpoints of the connection
+        for def in "${evtchn_defs[@]}"
+        do
+            read -r local_port remote_dom_idx remote_port <<< "$def"
+            if test -z "$local_port" || test -z "$remote_dom_idx" || test -z "$remote_port"
+            then
+                echo "Malformed evtchn definition: '$def' in DOMU_STATIC_EVTCHNS[$local_dom_idx]"
+                cleanup_and_return_err
+            fi
+
+            # Define keys for both endpoints of the connection
+            local_key="$local_dom_idx,$local_port"
+            remote_key="$remote_dom_idx,$remote_port"
+
+            if [[ "$local_key" == "$remote_key" ]]; then
+                echo "Invalid evtchn definition: '$def' in DOMU_STATIC_EVTCHNS[$local_dom_idx]"
+                cleanup_and_return_err
+            fi
+
+            # For each key, if it is not already in our map, assign it a new phandle
+            if [[ ! -v EVTCHN_ENDPOINT_TO_PHANDLE_MAP[$local_key] ]]
+            then
+                get_next_phandle new_phandle
+                EVTCHN_ENDPOINT_TO_PHANDLE_MAP[$local_key]=$new_phandle
+                echo "Local endpoint '$local_key' is assigned phandle '$new_phandle'"
+            fi
+
+            if [[ ! -v EVTCHN_ENDPOINT_TO_PHANDLE_MAP[$remote_key] ]]
+            then
+                get_next_phandle new_phandle
+                EVTCHN_ENDPOINT_TO_PHANDLE_MAP[$remote_key]=$new_phandle
+                echo "Remote endpoint '$remote_key' is assigned phandle '$new_phandle'"
+            fi
+        done
+    done
+}
+
+function xen_dt_domu_add_evtchns()
+{
+    # $1 - dt path
+    local path=$1
+    # $2 - index of the current domain
+    local local_dom_idx=$2
+    # $3 - full event channel definition string
+    local evtchn_str=$3
+
+    local def
+    local local_port remote_dom_idx remote_port
+    local local_phandle remote_phandle
+    local local_key remote_key
+
+    IFS=';' read -ra evtchn_defs <<< "$evtchn_str"
+
+    # Loop over each definition and create a node for it
+    for def in "${evtchn_defs[@]}"
+    do
+        read -r local_port remote_dom_idx remote_port <<< "$def"
+        if test -z "$local_port" || test -z "$remote_dom_idx" || test -z "$remote_port"
+        then
+            echo "Malformed evtchn definition: '$def' in DOMU_STATIC_EVTCHNS[$local_dom_idx]"
+            cleanup_and_return_err
+        fi
+
+        # Re-create the keys for both endpoints of the connection to look up the phandles
+        local_key="$local_dom_idx,$local_port"
+        remote_key="$remote_dom_idx,$remote_port"
+
+        local_phandle=${EVTCHN_ENDPOINT_TO_PHANDLE_MAP[$local_key]}
+        remote_phandle=${EVTCHN_ENDPOINT_TO_PHANDLE_MAP[$remote_key]}
+
+        if test -z "$local_phandle" || test -z "$remote_phandle"
+        then
+            echo "Could not find phandle for endpoint '$local_key' or '$remote_key'"
+            cleanup_and_return_err
+        fi
+
+        dt_mknode "${path}" "evtchn@$local_port"
+        dt_set "${path}/evtchn@$local_port" "phandle" "hex" "$local_phandle"
+        dt_set "${path}/evtchn@$local_port" "compatible" "str" "xen,evtchn-v1"
+        dt_set "${path}/evtchn@$local_port" "xen,evtchn" "hex" "$local_port $remote_phandle"
+    done
+}

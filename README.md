@@ -218,6 +218,27 @@ Where:
       DOMU_VCPU_HARD_AFFINITY[number,1]="3"
 ```
 
+- DOMU_STATIC_EVTCHNS[number]="local_port remote_dom_idx remote_port; ..."
+  if specified, this parameter allows the configuration of static event channels
+  for inter-domain communication. Each entry in DOMU_STATIC_EVTCHNS[number]
+  specifies one or more event channels for a particular domain.
+  The configuration format for each event channel definition is a set of
+  three values:
+    - local_port: The numeric port number for the local domain's endpoint.
+      This value must be unique within current domain.
+    - remote_dom_idx: The array index of the remote domain (e.g., if
+      connecting to DomU1, this would be `1`).
+    - remote_port: The numeric port number for the remote domain's endpoint.
+
+  Multiple event channel definitions for a single domain can be provided by
+  separating them with a semicolon (;).
+
+  Below is an example that creates two pairs of bidirectional channels between
+  two domains:
+  NUM_DOMUS=2
+  DOMU_STATIC_EVTCHNS[0]="10 1 11; 12 1 13"
+  DOMU_STATIC_EVTCHNS[1]="11 0 10; 13 0 12"
+
 - DOMU_COLORS[number] specifies the colors (cache coloring) to be used
   for the domain and is in the format startcolor-endcolor
 
