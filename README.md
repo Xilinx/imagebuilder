@@ -319,6 +319,12 @@ Where:
   2: Hardware
   4: Xenstore
 
+- DOMU_TRAP_UNMAP[number] is an Arm-only option that configures handling of
+  domain accesses to unmapped address ranges. It is optional and has no effect
+  on x86. If set to 0, domain reads will return all bits as ones corresponding
+  to the access size and writes will be ignored. If set to 1, such accesses will
+  trap. The default is 1 when not specified.
+
 - LINUX is optional but specifies the Linux kernel for when Xen is NOT
   used.  To enable this set any LINUX\_\* variables and do NOT set the
   XEN variable.
