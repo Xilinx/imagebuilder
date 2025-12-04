@@ -498,6 +498,11 @@ function xen_device_tree_editing()
             dt_set "/chosen/domU$i" "trap-unmapped-accesses" "int" "${DOMU_TRAP_UNMAP[$i]}"
         fi
 
+        if test "${DOMU_PASSTHROUGH_PROP[$i]}" = "enabled"
+        then
+            dt_set "/chosen/domU$i" "passthrough" "str" "enabled"
+        fi
+
         if test -n "${DOMU_SHARED_MEM[i]}"
         then
             add_device_tree_static_shared_mem "/chosen/domU${i}" "${DOMU_SHARED_MEM[i]}"

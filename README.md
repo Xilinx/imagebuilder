@@ -325,6 +325,12 @@ Where:
   to the access size and writes will be ignored. If set to 1, such accesses will
   trap. The default is 1 when not specified.
 
+- DOMU_PASSTHROUGH_PROP[number] is optional string used to permit a non-hardware
+  domain to use the IOMMU, which is a prerequisite for device passthrough.
+  If set to "enabled", the passthrough = "enabled"; property is added to
+  the domain's device tree node. This option has no effect if the IOMMU is not
+  active.
+
 - LINUX is optional but specifies the Linux kernel for when Xen is NOT
   used.  To enable this set any LINUX\_\* variables and do NOT set the
   XEN variable.
