@@ -504,6 +504,75 @@ adds them to the dom0 rootfs partition under /etc/xen. It makes it
 easier to start those domUs from dom0.
 
 
+## scripts/wic-xen-builder
+
+wic-xen-builder takes an existing WIC image (e.g produced by Yocto) and a
+uboot-script-gen config, adds a dedicated FAT32 partition containing all
+boot files whose load command is not explicitly set by the user, and
+generates a boot script to load them. The result is a self-contained WIC
+image ready to flash and boot Xen.
+
+The WIC image is modified in-place. Make a backup first if needed.
+Does not require root.
+
+### Usage
+
+```
+$ bash scripts/wic-xen-builder -c CONFIG -d DIRECTORY [-S] [-- EXTRA_FLAGS]
+```
+
+Where:\
+-c specifies the path to the config file\
+-d specifies the directory containing the binaries\
+-S saves intermediate files (modified config, boot files)
+   into a wic-xen-builder-temps/ directory next to DISK\_IMAGE\
+-h shows the help message\
+Everything after `--` is passed to uboot-script-gen as extra flags.
+uboot-script-gen is always called with -s (dynamic load addresses).
+
+### Config variables
+
+wic-xen-builder uses the same config format as uboot-script-gen, plus
+these additional variables.
+
+Required:
+
+- DISK\_IMAGE specifies the path to the existing WIC image to modify.
+
+- XEN\_BOOT\_DEV specifies the boot device type (usb, mmc, scsi, virtio,
+  nvme, sata).
+
+- UBOOT\_SOURCE and UBOOT\_SCRIPT must also be set (same as for
+  uboot-script-gen).
+
+Optional:
+
+- MAX\_DISK\_SIZE specifies the total size in bytes of the target device
+  (USB stick, SD card, etc.) where the image will be flashed. The script
+  refuses to create a new partition if the modified image would exceed
+  this limit. Default: 64GB.
+
+- XEN\_BOOT\_PARTITION specifies the partition number of an existing FAT32
+  partition to use instead of creating a new one. Xen files are copied
+  alongside existing contents (no reformat). Useful when the image is
+  too large to add a new partition.
+
+- XEN\_BOOT\_DEVNUM specifies the device number. Default: 0.
+
+Files whose `*_LOAD` variable is not defined by the user are placed on
+the Xen partition and loaded from there. Files with an explicit
+`*_LOAD` (e.g. `DOM0_LOAD="fatload mmc 0:1"`) are loaded from wherever
+the user specifies and they are not copied to the Xen partition.
+
+If a partition labeled "xen-boot" (GPT) or with volume label "XENBOOT"
+(MBR) already exists, the script reuses it: the partition is reformatted
+and all previous contents are replaced with the newly generated files.
+This prevents partition accumulation from repeated runs.
+
+If bmaptool is available, the script regenerates the bmap file
+alongside the modified WIC image.
+
+
 ## Debug
 
 This section defines config file debug options

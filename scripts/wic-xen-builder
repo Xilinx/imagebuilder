@@ -1,0 +1,802 @@
+#!/bin/bash
+
+# wic-xen-builder -- Add a Xen boot partition to an existing WIC image
+#
+# Given a uboot-script-gen config and an existing WIC image (e.g. from
+# Yocto), this script adds a dedicated FAT32 partition containing all
+# boot files whose load command is not explicitly set by the user (i.e.
+# files not already present in the WIC). It then calls uboot-script-gen
+# to produce a boot script that loads those files from the new partition.
+# The result is a self-contained WIC image ready to flash and boot Xen.
+# The image is modified in-place. Make a backup first if needed.
+
+set -e
+set -o pipefail
+
+export MTOOLS_SKIP_CHECK=1
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TMPDIR_BASE=""
+XEN_PARTNUM=""
+XEN_PART_OFFSET=""
+XEN_PART_FAT_SECTORS=""
+LABEL_TYPE=""
+
+# Partition sizing defaults
+# Space reserved for boot script files (boot.scr, boot.source).
+PART_BOOT_SCRIPTS_RESERVE=$(( 128 * 1024 ))
+# Extra margin for FAT32 filesystem overhead
+PART_FAT32_MARGIN=$(( 16 * 1024 * 1024 ))
+# Partition alignment boundary
+PART_ALIGN=$(( 2 * 1024 * 1024 ))
+# FAT32 minimum: 65525 clusters × 512 bytes ≈ 33MB, rounded up
+PART_MIN_SIZE=$(( 34 * 1024 * 1024 ))
+
+function cleanup()
+{
+    if test "$TMPDIR_BASE" && test -d "$TMPDIR_BASE"
+    then
+        rm -rf "$TMPDIR_BASE" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
+
+function usage()
+{
+    cat <<'EOF'
+Usage: wic-xen-builder -c CONFIG -d DIRECTORY [-S] [-- EXTRA_FLAGS]
+
+Options:
+  -c CONFIG       Config file (same format as uboot-script-gen)
+  -d DIRECTORY    Directory containing the binaries
+  -S              Save intermediate files (config, boot.scr, boot.source)
+                  into <DISK_IMAGE_DIR>/wic-xen-builder-temps/
+  -h              Show this help
+
+Everything after -- is passed to uboot-script-gen as extra flags.
+
+Note: uboot-script-gen is always called with -s (dynamic load addresses).
+
+The script modifies DISK_IMAGE in-place. Make a backup first if needed.
+
+Required config variables:
+  DISK_IMAGE      Path to the existing WIC image to modify
+  XEN_BOOT_DEV    Boot device type (usb, mmc, scsi, virtio, nvme, sata)
+
+Optional config variables:
+  MAX_DISK_SIZE      Total size in bytes of the target device (default: 64GB).
+                     The script refuses to create a new partition if it would
+                     exceed this limit.
+  XEN_BOOT_PARTITION Partition number of an existing FAT32 partition to use
+                     instead of creating a new one. Xen files are copied
+                     alongside existing contents (no reformat). Useful when
+                     the image is too large to add a new partition.
+  XEN_BOOT_DEVNUM    Device number (default: 0)
+EOF
+    exit "${1:-0}"
+}
+
+function check_depends()
+{
+    local missing=()
+    for cmd in sfdisk fdisk stat truncate mformat mcopy mdir mlabel
+    do
+        if ! command -v "$cmd" >/dev/null 2>&1
+        then
+            missing+=("$cmd")
+        fi
+    done
+    if test ${#missing[@]} -gt 0
+    then
+        echo "Missing required tools: ${missing[*]}" >&2
+        echo "" >&2
+        echo "Install with:" >&2
+        echo "  Debian/Ubuntu: sudo apt install mtools fdisk util-linux coreutils" >&2
+        echo "  Fedora/RHEL:   sudo dnf install mtools util-linux coreutils" >&2
+        exit 1
+    fi
+    if ! command -v bmaptool >/dev/null 2>&1
+    then
+        echo "Warning: bmaptool not found, bmap regeneration will be skipped" >&2
+        echo "  Install: pip install bmap-tools  (or: sudo apt install bmap-tools)" >&2
+    fi
+}
+
+# Partition table helpers (all based on sfdisk --dump)
+#
+# sfdisk --dump output format:
+#   header:  label: gpt|dos
+#            sector-size: 512
+#   entries: image.wic1 : start=  2048, size= 131072, type=..., name="..."
+
+function get_sector_size()
+{
+    local ss
+    ss=$(sfdisk --dump "$1" 2>/dev/null | sed -n 's/^sector-size: *//p')
+    echo "${ss:-512}"
+}
+
+# Get the last partition number from the partition table.
+function get_last_partnum()
+{
+    sfdisk --dump "$1" 2>/dev/null | awk '
+        /^[^ ]+[0-9]+ *:/ {
+            last = $1
+            sub(/.*[^0-9]/, "", last)
+        }
+        END { print last+0 }'
+}
+
+# Get start sector and size in sectors for a given partition number.
+# Prints: START_SECTOR SIZE_SECTORS
+function get_partition_start_size()
+{
+    local image="$1" partnum="$2"
+    sfdisk --dump "$image" 2>/dev/null | awk -v n="$partnum" '
+        /^[^ ]+[0-9]+ *:/ {
+            pnum = $1; sub(/.*[^0-9]/, "", pnum)
+            if (pnum+0 == n) {
+                for (i = 1; i <= NF; i++) {
+                    if ($i == "start=") start = $(i+1) + 0
+                    if ($i == "size=") size = $(i+1) + 0
+                }
+                print start, size
+            }
+        }'
+}
+
+# mtools image specifier: image@@offset for direct access without mount
+function mtools_img()
+{
+    echo "${1}@@${XEN_PART_OFFSET}"
+}
+
+# Partition management
+
+# Build list of files that go on the Xen partition.
+# Sets global XEN_FILES array with paths relative to uboot_dir.
+# Rule: if *_LOAD is NOT defined by the user, those files go on our partition.
+function build_xen_file_list()
+{
+    local uboot_dir="$1"
+    XEN_FILES=()
+
+    if test -z "$XEN_LOAD"
+    then
+        if test "$XEN" && test -f "$uboot_dir/$XEN"
+        then
+            XEN_FILES+=("$XEN")
+        fi
+        if test "$DEVICE_TREE" && test -f "$uboot_dir/$DEVICE_TREE"
+        then
+            XEN_FILES+=("$DEVICE_TREE")
+        fi
+    fi
+
+    if test -z "$DOM0_LOAD"
+    then
+        if test "$DOM0_KERNEL" && test -f "$uboot_dir/$DOM0_KERNEL"
+        then
+            XEN_FILES+=("$DOM0_KERNEL")
+        fi
+        if test "$DOM0_RAMDISK" && test -f "$uboot_dir/$DOM0_RAMDISK"
+        then
+            XEN_FILES+=("$DOM0_RAMDISK")
+        fi
+    fi
+
+    local i=0
+    while test "$i" -lt "${NUM_DOMUS:-0}"
+    do
+        if test -z "${DOMU_LOAD[$i]}"
+        then
+            if test "${DOMU_KERNEL[$i]}" && test -f "$uboot_dir/${DOMU_KERNEL[$i]}"
+            then
+                XEN_FILES+=("${DOMU_KERNEL[$i]}")
+            fi
+            if test "${DOMU_RAMDISK[$i]}" && test -f "$uboot_dir/${DOMU_RAMDISK[$i]}"
+            then
+                XEN_FILES+=("${DOMU_RAMDISK[$i]}")
+            fi
+            if test "${DOMU_PASSTHROUGH_DTB[$i]}" && test -f "$uboot_dir/${DOMU_PASSTHROUGH_DTB[$i]}"
+            then
+                XEN_FILES+=("${DOMU_PASSTHROUGH_DTB[$i]}")
+            fi
+        fi
+        i=$(( i + 1 ))
+    done
+
+    # Files loaded via LOAD_CMD (no *_LOAD override exists for these)
+
+    # When FDTEDIT is set, uboot-script-gen applies overlays at compile
+    # time (fdtoverlay) and zeros NUM_DT_OVERLAY, so they are not loaded
+    # at runtime. Skip them to avoid copying unused files.
+    if test -z "$FDTEDIT"
+    then
+        local i=0
+        while test "$i" -lt "${NUM_DT_OVERLAY:-0}"
+        do
+            if test "${DT_OVERLAY[$i]}" && test -f "$uboot_dir/${DT_OVERLAY[$i]}"
+            then
+                XEN_FILES+=("${DT_OVERLAY[$i]}")
+            fi
+            i=$(( i + 1 ))
+        done
+    fi
+
+    if test "$XEN_POLICY" && test -f "$uboot_dir/$XEN_POLICY"
+    then
+        XEN_FILES+=("$XEN_POLICY")
+    fi
+
+    if test "$BITSTREAM" && test -f "$uboot_dir/$BITSTREAM"
+    then
+        XEN_FILES+=("$BITSTREAM")
+    fi
+
+    # Deduplicate: multiple domains may reference the same file
+    mapfile -t XEN_FILES < <(printf '%s\n' "${XEN_FILES[@]}" | sort -u)
+}
+
+# Calculate raw file sizes (sum of XEN_FILES + boot script reserve).
+# Used for free space checks when reusing an existing partition.
+function calculate_files_size()
+{
+    local uboot_dir="$1"
+    local total=0
+    local fsize
+
+    for f in "${XEN_FILES[@]}"
+    do
+        fsize=$(stat -c%s "$uboot_dir/$f")
+        total=$(( total + fsize ))
+    done
+
+    total=$(( total + PART_BOOT_SCRIPTS_RESERVE ))
+    echo "$total"
+}
+
+# Calculate partition size including FAT32 overhead and alignment.
+# Used when creating a new partition.
+function calculate_partition_size()
+{
+    local uboot_dir="$1"
+    local total
+
+    total=$(calculate_files_size "$uboot_dir")
+    total=$(( total + PART_FAT32_MARGIN ))
+    total=$(( (total + PART_ALIGN - 1) / PART_ALIGN * PART_ALIGN ))
+
+    if test "$total" -lt "$PART_MIN_SIZE"
+    then
+        total="$PART_MIN_SIZE"
+    fi
+
+    echo "$total"
+}
+
+# Find an existing Xen partition by label.
+# For GPT: looks for partition name "xen-boot" in sfdisk --dump output.
+# For MBR: looks for FAT volume label "XENBOOT" on type=c partitions.
+# Prints the partition number if found, returns 1 otherwise.
+function find_xen_partition()
+{
+    local image="$1"
+
+    if test "$LABEL_TYPE" = "gpt"
+    then
+        local partnum
+        partnum=$(sfdisk --dump "$image" 2>/dev/null | awk '
+            /name="xen-boot"/ {
+                pnum = $1
+                sub(/.*[^0-9]/, "", pnum)
+                print pnum
+                exit
+            }')
+        if test "$partnum"
+        then
+            echo "$partnum"
+            return 0
+        fi
+    else
+        # MBR: no partition names, check FAT volume labels instead.
+        # Iterate all FAT32 (type=c) partitions and read labels with mlabel.
+        local sector_size
+        sector_size=$(get_sector_size "$image")
+
+        local pnum start_sector offset vlabel
+        while read pnum start_sector
+        do
+            offset=$(( start_sector * sector_size ))
+            vlabel=$(mlabel -i "${image}@@${offset}" -s :: 2>/dev/null | \
+                sed 's/.*is //' | tr -d ' ') || true
+            if test "$vlabel" = "XENBOOT"
+            then
+                echo "$pnum"
+                return 0
+            fi
+        done < <(sfdisk --dump "$image" 2>/dev/null | awk '
+            /^[^ ]+[0-9]+ *:/ && /type= *[cC][, ]|type= *[cC]$/ {
+                p = $1; sub(/.*[^0-9]/, "", p)
+                for (i = 1; i <= NF; i++)
+                    if ($i == "start=") s = $(i+1) + 0
+                print p, s
+            }')
+    fi
+
+    return 1
+}
+
+# Parse partition offset and size using sfdisk --dump.
+# Sets XEN_PART_OFFSET and XEN_PART_FAT_SECTORS globals.
+function parse_partition_geometry()
+{
+    local image="$1"
+    local partnum="$2"
+    local sector_size
+    sector_size=$(get_sector_size "$image")
+
+    local start_sector size_sectors
+    read start_sector size_sectors <<< $(get_partition_start_size "$image" "$partnum")
+
+    if test -z "$start_sector" || test -z "$size_sectors" || \
+       test "$start_sector" -le 0 || test "$size_sectors" -le 0
+    then
+        echo "failed to read geometry for partition #$partnum on $image"
+        exit 1
+    fi
+
+    XEN_PART_OFFSET=$(( start_sector * sector_size ))
+    # mtools uses 512-byte sectors internally
+    XEN_PART_FAT_SECTORS=$(( size_sectors * sector_size / 512 ))
+}
+
+function add_xen_partition()
+{
+    local image="$1"
+    local size_bytes="$2"
+    local img_size="$3"
+
+    local sector_size
+    sector_size=$(get_sector_size "$image")
+
+    local size_sectors=$(( size_bytes / sector_size ))
+
+    # GPT needs extra space for:
+    #   - backup header at end of disk (34 sectors)
+    #   - partition alignment gap (sfdisk aligns to 1MB/2048 sectors)
+    local extra_bytes="$size_bytes"
+    if test "$LABEL_TYPE" = "gpt"
+    then
+        extra_bytes=$(( size_bytes + 34 * sector_size + 1024 * 1024 ))
+    fi
+    local new_size=$(( img_size + extra_bytes ))
+
+    echo "Extending image by $(( size_bytes / 1024 / 1024 ))MB (partition table: $LABEL_TYPE)..."
+    truncate -s "$new_size" "$image"
+
+    echo "Adding FAT32 partition..."
+    if test "$LABEL_TYPE" = "gpt"
+    then
+        # GPT: use Linux filesystem GUID to prevent U-Boot's UEFI
+        # subsystem from probing this partition as a FAT volume
+        # during boot manager initialization (which can crash).
+        # The Xen boot script uses fatload (native), not UEFI,
+        # so the type GUID is irrelevant for actual operation.
+        echo ", +${size_sectors}, 0FC63DAF-8483-4772-8E79-3D69D8477DE4" | \
+            sfdisk --append "$image" >/dev/null
+    else
+        # MBR: type 0x0C (W95 FAT32 LBA)
+        echo ", +${size_sectors}, 0x0C" | sfdisk --append "$image" >/dev/null
+    fi
+
+    # Detect the new partition number
+    XEN_PARTNUM=$(get_last_partnum "$image")
+
+    # Set partition name (GPT only)
+    if test "$LABEL_TYPE" = "gpt"
+    then
+        sfdisk --part-label "$image" "$XEN_PARTNUM" "xen-boot" >/dev/null 2>&1 || true
+    fi
+
+    parse_partition_geometry "$image" "$XEN_PARTNUM"
+
+    echo "Formatting partition #$XEN_PARTNUM as FAT32..."
+    mformat -i "$(mtools_img "$image")" -F -v XENBOOT -T "$XEN_PART_FAT_SECTORS" ::
+
+    echo "Created Xen partition #$XEN_PARTNUM on $image"
+}
+
+# Reuse an existing Xen partition: reformat (wipes all previous contents)
+# and update geometry globals
+function reuse_xen_partition()
+{
+    local image="$1"
+    XEN_PARTNUM="$2"
+
+    parse_partition_geometry "$image" "$XEN_PARTNUM"
+
+    echo "Reusing existing Xen partition #$XEN_PARTNUM, reformatting..."
+    mformat -i "$(mtools_img "$image")" -F -v XENBOOT -T "$XEN_PART_FAT_SECTORS" ::
+}
+
+# Check that the partition is large enough for the given size in bytes.
+# Requires parse_partition_geometry to have been called first.
+function check_partition_size()
+{
+    local partnum="$1"
+    local needed="$2"
+    local existing_bytes=$(( XEN_PART_FAT_SECTORS * 512 ))
+
+    if test "$needed" -gt "$existing_bytes"
+    then
+        echo "partition #$partnum is too small" \
+             "($(( existing_bytes / 1024 / 1024 ))MB < $(( needed / 1024 / 1024 ))MB)"
+        return 1
+    fi
+}
+
+# Config generation
+
+function generate_modified_config()
+{
+    local original="$1"
+    local output="$2"
+
+    case "$XEN_BOOT_DEV" in
+        usb|mmc|scsi|virtio|nvme|sata) ;;
+        *)
+            echo "invalid XEN_BOOT_DEV: $XEN_BOOT_DEV (use: usb, mmc, scsi, virtio, nvme, sata)"
+            exit 1
+            ;;
+    esac
+
+    # Copy original config, stripping wic-xen-builder-specific variables
+    # that uboot-script-gen should not see
+    sed -e '/^[[:space:]]*\(export[[:space:]]\+\)\{0,1\}DISK_IMAGE=/d' \
+        -e '/^[[:space:]]*\(export[[:space:]]\+\)\{0,1\}MAX_DISK_SIZE=/d' \
+        -e '/^[[:space:]]*\(export[[:space:]]\+\)\{0,1\}XEN_BOOT_DEV=/d' \
+        -e '/^[[:space:]]*\(export[[:space:]]\+\)\{0,1\}XEN_BOOT_DEVNUM=/d' \
+        -e '/^[[:space:]]*\(export[[:space:]]\+\)\{0,1\}XEN_BOOT_PARTITION=/d' \
+        "$original" > "$output"
+
+    # Append overrides: LOAD_CMD is the default load command for
+    # uboot-script-gen. Any *_LOAD already set by the user in the
+    # original config takes precedence (uboot-script-gen only falls
+    # back to LOAD_CMD when *_LOAD is unset).
+    local devnum="${XEN_BOOT_DEVNUM:-0}"
+    cat >> "$output" <<CONFEOF
+
+# wic-xen-builder overrides (auto-generated)
+LOAD_CMD="fatload ${XEN_BOOT_DEV} ${devnum}:${XEN_PARTNUM}"
+CONFEOF
+}
+
+function copy_files_to_partition()
+{
+    local image="$1"
+    local uboot_dir="$2"
+    local img_spec
+    img_spec="$(mtools_img "$image")"
+
+    echo "Copying files to Xen partition..."
+
+    # XEN_FILES was built by build_xen_file_list earlier
+    local fdir
+    for f in "${XEN_FILES[@]}"
+    do
+        fdir=$(dirname "$f")
+        if test "$fdir" != "."
+        then
+            mmd -i "$img_spec" "::$fdir" 2>/dev/null || true
+        fi
+        mcopy -i "$img_spec" -o "$uboot_dir/$f" "::$f"
+        echo "  copied $f"
+    done
+
+    # Copy boot script files
+    if test -f "$uboot_dir/$UBOOT_SCRIPT"
+    then
+        mcopy -i "$img_spec" -o "$uboot_dir/$UBOOT_SCRIPT" "::"
+        echo "  copied $UBOOT_SCRIPT"
+    fi
+    if test -f "$uboot_dir/$UBOOT_SOURCE"
+    then
+        mcopy -i "$img_spec" -o "$uboot_dir/$UBOOT_SOURCE" "::"
+        echo "  copied $UBOOT_SOURCE"
+    fi
+}
+
+# Main
+
+CONFIG=""
+UBOOT_DIR=""
+SAVE_TEMPS=""
+EXTRA_FLAGS=()
+
+while test $# -gt 0
+do
+    case "$1" in
+        -c|-d)
+            if test $# -lt 2
+            then
+                echo "$1 requires an argument"
+                exit 1
+            fi
+            ;;&
+        -c) CONFIG="$2"; shift 2 ;;
+        -d) UBOOT_DIR="$2"; shift 2 ;;
+        -S) SAVE_TEMPS=1; shift ;;
+        -h|--help) usage 0 ;;
+        --) shift; EXTRA_FLAGS=("$@"); break ;;
+        *)
+            echo "unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
+
+# Validate required arguments
+if test -z "$CONFIG"
+then
+    echo "config file required (-c)"
+    exit 1
+fi
+if test ! -f "$CONFIG"
+then
+    echo "config file not found: $CONFIG"
+    exit 1
+fi
+check_depends
+
+# Create temporary working directory
+TMPDIR_BASE=$(mktemp -d)
+
+# Source config
+source "$CONFIG"
+
+# Defaults for optional config variables
+MAX_DISK_SIZE="${MAX_DISK_SIZE:-68719476736}"
+
+# Validate UBOOT_DIR (can come from -d flag or config)
+if test -z "$UBOOT_DIR"
+then
+    echo "binary directory required (-d)"
+    exit 1
+fi
+if test ! -d "$UBOOT_DIR"
+then
+    echo "binary directory not found: $UBOOT_DIR"
+    exit 1
+fi
+
+# Validate required config
+if test -z "$DISK_IMAGE"
+then
+    echo "DISK_IMAGE not set in config"
+    exit 1
+fi
+if test ! -f "$DISK_IMAGE"
+then
+    echo "DISK_IMAGE not found: $DISK_IMAGE"
+    exit 1
+fi
+if test -z "$XEN_BOOT_DEV"
+then
+    echo "XEN_BOOT_DEV not set in config (e.g. usb, mmc)"
+    exit 1
+fi
+if test -z "$UBOOT_SOURCE"
+then
+    echo "UBOOT_SOURCE not set in config"
+    exit 1
+fi
+if test -z "$UBOOT_SCRIPT"
+then
+    echo "UBOOT_SCRIPT not set in config"
+    exit 1
+fi
+
+# Cache partition table type
+LABEL_TYPE=$(sfdisk --dump "$DISK_IMAGE" 2>/dev/null | sed -n 's/^label: *//p')
+
+# Build list of files that go on the Xen partition
+build_xen_file_list "$UBOOT_DIR"
+
+if test ${#XEN_FILES[@]} -eq 0
+then
+    echo "Warning: no boot files to copy (all *_LOAD overrides are set," \
+         "or no matching files found in $UBOOT_DIR)"
+fi
+
+user_partition=""
+existing_xen=""
+current_size=$(stat -c%s "$DISK_IMAGE")
+
+part_size=$(calculate_partition_size "$UBOOT_DIR")
+files_size=$(calculate_files_size "$UBOOT_DIR")
+
+if test "$XEN_BOOT_PARTITION"
+then
+    # Validate: must be a positive integer
+    case "$XEN_BOOT_PARTITION" in
+        ''|*[!0-9]*|0)
+            echo "invalid XEN_BOOT_PARTITION: $XEN_BOOT_PARTITION (must be a partition number)"
+            exit 1
+            ;;
+    esac
+
+    # Validate: partition must exist and be FAT
+    parse_partition_geometry "$DISK_IMAGE" "$XEN_BOOT_PARTITION"
+    if ! mdir -i "$(mtools_img "$DISK_IMAGE")" :: >/dev/null 2>&1
+    then
+        echo "partition #$XEN_BOOT_PARTITION not found or not a FAT filesystem"
+        exit 1
+    fi
+
+    XEN_PARTNUM="$XEN_BOOT_PARTITION"
+    user_partition="$XEN_BOOT_PARTITION"
+    echo "Using user-specified partition #$XEN_PARTNUM (XEN_BOOT_PARTITION)"
+else
+    existing_xen=$(find_xen_partition "$DISK_IMAGE") || true
+
+    if test "$existing_xen"
+    then
+        echo "Found existing Xen partition #$existing_xen, will reuse it"
+        XEN_PARTNUM="$existing_xen"
+    else
+        # Check if a new partition fits within MAX_DISK_SIZE
+        sector_size=$(get_sector_size "$DISK_IMAGE")
+        gpt_overhead=0
+        if test "$LABEL_TYPE" = "gpt"
+        then
+            gpt_overhead=$(( 34 * sector_size + 1024 * 1024 ))
+        fi
+        new_total=$(( current_size + part_size + gpt_overhead ))
+
+        if test "$new_total" -le "$MAX_DISK_SIZE"
+        then
+            XEN_PARTNUM=$(( $(get_last_partnum "$DISK_IMAGE") + 1 ))
+            echo "Creating new Xen partition #$XEN_PARTNUM" \
+                 "($(( part_size / 1024 / 1024 ))MB)"
+        else
+            echo "resulting image ($(( new_total / 1024 / 1024 ))MB)" \
+                 "would exceed MAX_DISK_SIZE ($(( MAX_DISK_SIZE / 1024 / 1024 ))MB)"
+            echo ""
+            echo "  files to copy: $(( files_size / 1024 / 1024 ))MB"
+            echo "  space needed:  $(( (new_total - current_size) / 1024 / 1024 ))MB"
+            echo ""
+            echo "Options:"
+            echo "  1. Use a larger device and increase MAX_DISK_SIZE"
+            echo "  2. Set XEN_BOOT_PARTITION=<N> in the config to copy"
+            echo "     Xen files to an existing FAT32 partition (e.g. the ESP)"
+            exit 1
+        fi
+    fi
+fi
+
+# Generate modified config
+config_modified="$TMPDIR_BASE/config-modified"
+generate_modified_config "$CONFIG" "$config_modified"
+echo "Generated modified config"
+
+# Run uboot-script-gen (before touching the WIC -- fail fast)
+# -s: let U-Boot calculate load addresses dynamically
+usg_args=(-c "$config_modified" -d "$UBOOT_DIR" -s "${EXTRA_FLAGS[@]}")
+
+echo "Running uboot-script-gen..."
+usg_output=$(bash "$SCRIPT_DIR/uboot-script-gen" \
+    "${usg_args[@]}")
+
+# Verify boot script was actually generated
+if test ! -f "$UBOOT_DIR/$UBOOT_SCRIPT"
+then
+    echo "uboot-script-gen did not produce $UBOOT_SCRIPT"
+    exit 1
+fi
+if test ! -f "$UBOOT_DIR/$UBOOT_SOURCE"
+then
+    echo "uboot-script-gen did not produce $UBOOT_SOURCE"
+    exit 1
+fi
+
+echo "Boot script OK, modifying WIC image..."
+
+# Execute partition strategy
+if test "$user_partition"
+then
+    # Geometry already parsed during validation
+    if ! check_partition_size "$user_partition" "$files_size"
+    then
+        exit 1
+    fi
+    echo "Copying Xen files to partition #$user_partition..."
+elif test "$existing_xen"
+then
+    # Check existing partition is large enough before reformatting
+    parse_partition_geometry "$DISK_IMAGE" "$existing_xen"
+    if ! check_partition_size "$existing_xen" "$part_size"
+    then
+        echo "delete the partition and re-run to create a larger one"
+        exit 1
+    fi
+
+    reuse_xen_partition "$DISK_IMAGE" "$existing_xen"
+else
+    add_xen_partition "$DISK_IMAGE" "$part_size" "$current_size"
+
+    # Verify partition number matches prediction. If it differs, the
+    # boot script (already generated) has the wrong partition number
+    # baked in. Fail and let the user re-run: next time the existing
+    # partition will be found with the correct number.
+    actual_partnum=$(get_last_partnum "$DISK_IMAGE")
+    if test "$actual_partnum" != "$XEN_PARTNUM"
+    then
+        echo "partition number mismatch: expected #$XEN_PARTNUM but got #$actual_partnum"
+        echo "the boot script has the wrong partition number, please re-run"
+        exit 1
+    fi
+fi
+
+# Copy files to the target partition
+copy_files_to_partition "$DISK_IMAGE" "$UBOOT_DIR"
+
+# Save intermediate files if requested
+TEMPS_DIR=""
+if test "$SAVE_TEMPS"
+then
+    TEMPS_DIR="$(dirname "$DISK_IMAGE")/wic-xen-builder-temps"
+    mkdir -p "$TEMPS_DIR"
+    cp "$config_modified" "$TEMPS_DIR/config-modified"
+    if test -f "$UBOOT_DIR/$UBOOT_SCRIPT"
+    then
+        cp "$UBOOT_DIR/$UBOOT_SCRIPT" "$TEMPS_DIR/"
+    fi
+    if test -f "$UBOOT_DIR/$UBOOT_SOURCE"
+    then
+        cp "$UBOOT_DIR/$UBOOT_SOURCE" "$TEMPS_DIR/"
+    fi
+    echo "Saved intermediate files to $TEMPS_DIR/"
+fi
+
+# Regenerate bmap if bmaptool is available
+BMAP_OUTPUT=""
+if command -v bmaptool >/dev/null 2>&1
+then
+    echo "Regenerating bmap..."
+    if bmaptool create "$DISK_IMAGE" -o "${DISK_IMAGE}.bmap" 2>/dev/null
+    then
+        BMAP_OUTPUT="${DISK_IMAGE}.bmap"
+    else
+        echo "Warning: bmaptool failed (filesystem may not support SEEK_HOLE, e.g. NFS), skipping bmap"
+    fi
+fi
+
+# Summary
+
+echo ""
+echo "Done. Output: $DISK_IMAGE"
+if test "$BMAP_OUTPUT"
+then
+    echo "Bmap:   $BMAP_OUTPUT"
+fi
+if test "$TEMPS_DIR"
+then
+    echo "Temps:  $TEMPS_DIR/"
+fi
+
+# Partition table
+echo ""
+echo "Partition table:"
+LC_ALL=C fdisk -l "$DISK_IMAGE" 2>/dev/null | sed 's/^/  /'
+
+# Xen partition contents
+echo ""
+echo "Xen partition #${XEN_PARTNUM} contents:"
+mdir -i "$(mtools_img "$DISK_IMAGE")" -a :: \
+    2>/dev/null | sed 's/^/  /' \
+    || echo "  (could not list contents)"
+
+# U-Boot command (from uboot-script-gen output)
+echo ""
+echo "$usg_output" | tail -2
