@@ -547,6 +547,16 @@ function xen_device_tree_editing()
             dt_set "/chosen/domU$i" "mali-aw" "hex" "$(printf "0x%x" $mali_aw)"
         fi
 
+        if test "${DOMU_DSU_SCHEME[i]}"
+        then
+            dsu_part=${DOMU_DSU_SCHEME[i]}
+            if [ "$dsu_part" -lt 1 ] || [ "$dsu_part" -gt 7 ]; then
+                echo "DOMU_DSU_SCHEME[$i] ($dsu_part) is out of range [1,7]"
+                cleanup_and_return_err
+            fi
+            dt_set "/chosen/domU$i" "dsu-part" "int" "$dsu_part"
+        fi
+
         xen_dt_domu_add_vcpu_nodes "/chosen/domU$i" $i ${DOMU_VCPUS[$i]}
 
         if test "${DOMU_STATIC_EVTCHNS[$i]}"

@@ -212,6 +212,14 @@ Where:
   to the domain for GPU virtualization. Valid values range from 0 to 15. This
   binding is required for associating a VM with a GPU partition in Mali-G78AE.
 
+- DOMU_DSU_SCHEME[number] specifies the DSU L3 cache partition scheme
+  assigned to the domain. The value is a single scheme number (1 to 7).
+  Scheme 0 is reserved for Xen. For example, "3" assigns scheme 3 to the
+  domain across all clusters.
+  Requires dsu_partitioning=1 and sched=null on the Xen command line.
+  If dsu_partitioning=1 all domains must be configured with a scheme otherwise
+  their creation will fail.
+
 - DOMU_VCPUS[number] is the number of vcpus for the VM, default 1
 
 - DOMU_VCPU_HARD_AFFINITY[number,vcpu] optional, is the A string
