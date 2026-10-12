@@ -784,9 +784,17 @@ function load_file()
     local fit_scr_name=$2
     local load_cmd=$3
 
-    local absolute_path="$(realpath --no-symlinks $filename)"
-    local base="$(realpath $PWD)"/
-    local relative_path=${absolute_path#"$base"}
+    local absolute_path
+    local relative_path
+
+    if absolute_path="$(realpath --no-symlinks "$filename" 2> /dev/null)" &&
+       test -n "$absolute_path"
+    then
+        local base="$(realpath "$PWD")"/
+        relative_path=${absolute_path#"$base"}
+    else
+        relative_path=$filename
+    fi
 
     # Default to LOAD_CMD if not specified
     if test -z "${load_cmd}"
