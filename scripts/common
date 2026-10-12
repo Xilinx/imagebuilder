@@ -19,6 +19,36 @@ tmp_dirs=()
 # Highest valid phandle. Will be decremented with each call to get_next_phandle
 phandle_next="0xfffffffe"
 
+# Prefix marking a file that only exists on the target: it is passed on as it
+# is written and nothing on the build host is looked at.
+TARGET_PATH_PREFIX="target:"
+
+function trim_blanks()
+{
+    local value=$1
+
+    value=${value#"${value%%[![:space:]]*}"}
+    echo "${value%"${value##*[![:space:]]}"}"
+}
+
+function is_target_path()
+{
+    local filename
+
+    filename=$(trim_blanks "$1")
+
+    test "${filename#"$TARGET_PATH_PREFIX"}" != "$filename"
+}
+
+function target_path_name()
+{
+    local filename
+
+    filename=$(trim_blanks "$1")
+
+    echo "${filename#"$TARGET_PATH_PREFIX"}"
+}
+
 function remove_tmp_files()
 {
     for i in "${tmp_files[@]}"

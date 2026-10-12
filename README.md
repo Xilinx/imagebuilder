@@ -438,6 +438,45 @@ Where:\
 -s addresses and sizes are calculated dynamically from U-Boot, hence
    binaries don't need to be available at the time of invocation.\
 
+### Files that only exist on the target
+
+Paths in the config file name files on the build host, resolved relative to the
+directory given with -d, and the generator opens them to check their type and
+measure them. Sometimes the binaries are not there at all: the image recipe may
+write them straight into the target rootfs, so at generation time there is
+nothing to look at and the layout under -d has no reason to mirror the one the
+board will see.
+
+For those cases a path can be prefixed with `target:`. The prefix means that
+the file lives on the target storage, that the caller takes responsibility for
+it being there, and that the generator must not try to validate it. The rest of
+the path is handed to U-Boot unchanged, so it is interpreted by the load
+command at boot time, and PREPEND_PATH is not applied to it:
+
+```
+DOMU_KERNEL[0]="target:/boot/Image"
+DOMU_RAMDISK[0]="target:/root/rootfs.cpio.gz"
+DOMU_LOAD[0]="ext4load mmc 0:2"
+```
+
+The prefix can be used on XEN, XEN_POLICY, DOM0_KERNEL, DOM0_RAMDISK, LINUX,
+BITSTREAM, DOMU_KERNEL, DOMU_RAMDISK and DOMU_PASSTHROUGH_DTB. Everything else
+a config can point at, including the device tree, the device tree overlays and
+APPEND_EXTRA_CMDS, is handled on the build host and has to be reachable from
+there. LINUX_RAMDISK is excluded too: its address range is written into the
+device tree at generation time, which means measuring it.
+
+Because the file cannot be measured on the build host, its load address and
+size have to be computed by U-Boot, so `target:` requires -s. It also cannot be
+combined with a FIT image, which has to embed the binaries it carries. Note
+that with -s the images are placed one after the other without consulting
+RESERVED_MEM_SPACES.
+
+The `scripts/disk_image` helper reads the same config to size the partitions
+and to write the xl configuration files, and it has no way of reaching a file
+that only exists on the target, so a config using the prefix is not usable
+with it.
+
 ### Signed FIT images
 
 Signed FIT images are a way to sign images with asymmetrical keys. While 

@@ -778,6 +778,111 @@ function add_size_calculate()
     filesize=$offset
 }
 
+function target_capable_vars()
+{
+    local i=0
+
+    echo XEN XEN_POLICY DOM0_KERNEL DOM0_RAMDISK LINUX BITSTREAM
+
+    while test $i -lt ${NUM_DOMUS:-0}
+    do
+        echo "DOMU_KERNEL[$i]" "DOMU_RAMDISK[$i]" "DOMU_PASSTHROUGH_DTB[$i]"
+        i=$(( i + 1 ))
+    done
+}
+
+function host_only_vars()
+{
+    local i=0
+
+    echo DEVICE_TREE APPEND_EXTRA_CMDS FDTEDIT FIT_ENC_KEY_DIR FIT_ENC_UB_DTB \
+         LOPPER_PATH PASSTHROUGH_DTS_REPO
+
+    while test $i -lt ${NUM_DT_OVERLAY:-0}
+    do
+        echo "DT_OVERLAY[$i]"
+        i=$(( i + 1 ))
+    done
+}
+
+function uses_target_paths()
+{
+    local var
+
+    for var in $(target_capable_vars)
+    do
+        if is_target_path "${!var}"
+        then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+function check_target_paths()
+{
+    local var
+    local name
+
+    for var in $(host_only_vars)
+    do
+        if is_target_path "${!var}"
+        then
+            echo "$var cannot use the \"$TARGET_PATH_PREFIX\" prefix, the device tree and the files feeding it are handled on the build host, exiting"
+            return 1
+        fi
+    done
+
+    if is_target_path "$LINUX_RAMDISK"
+    then
+        echo "LINUX_RAMDISK cannot use the \"$TARGET_PATH_PREFIX\" prefix, its address range is written into the device tree from here, exiting"
+        return 1
+    fi
+
+    for var in $(target_capable_vars)
+    do
+        if ! is_target_path "${!var}"
+        then
+            continue
+        fi
+
+        name=$(target_path_name "${!var}")
+
+        if test -z "$name"
+        then
+            echo "$var is the \"$TARGET_PATH_PREFIX\" prefix and nothing else, there is no file name to pass on, exiting"
+            return 1
+        fi
+
+        # The file name is passed around unquoted, a blank would split it
+        if [[ "$name" == *[[:space:]]* ]]
+        then
+            echo "$var contains blanks after the \"$TARGET_PATH_PREFIX\" prefix, exiting"
+            return 1
+        fi
+    done
+
+    if ! uses_target_paths
+    then
+        return 0
+    fi
+
+    if test "$FIT"
+    then
+        echo "The \"$TARGET_PATH_PREFIX\" prefix cannot be used together with a FIT image, which has to embed the binaries, exiting"
+        return 1
+    fi
+
+    if test -z "$CALC"
+    then
+        echo "The \"$TARGET_PATH_PREFIX\" prefix requires the -s option, load addresses cannot be computed without reading the files, exiting"
+        return 1
+    fi
+
+    return 0
+}
+
 function load_file()
 {
     local filename=$1
@@ -786,14 +891,21 @@ function load_file()
 
     local absolute_path
     local relative_path
+    local load_path
 
-    if absolute_path="$(realpath --no-symlinks "$filename" 2> /dev/null)" &&
-       test -n "$absolute_path"
+    if is_target_path "$filename"
     then
-        local base="$(realpath "$PWD")"/
-        relative_path=${absolute_path#"$base"}
+        load_path="$(target_path_name "$filename")"
     else
-        relative_path=$filename
+        if absolute_path="$(realpath --no-symlinks "$filename" 2> /dev/null)" &&
+           test -n "$absolute_path"
+        then
+            local base="$(realpath "$PWD")"/
+            relative_path=${absolute_path#"$base"}
+        else
+            relative_path=$filename
+        fi
+        load_path="${prepend_path:+$prepend_path/}$relative_path"
     fi
 
     # Default to LOAD_CMD if not specified
@@ -808,10 +920,10 @@ function load_file()
         add_size_from_file $filename
     else
         if test "$CALC"; then
-            echo "$load_cmd \${memaddr} ${prepend_path:+$prepend_path/}$relative_path" >> $UBOOT_SOURCE
+            echo "$load_cmd \${memaddr} $load_path" >> $UBOOT_SOURCE
             add_size_calculate $fit_scr_name
         else
-            echo "$load_cmd $memaddr ${prepend_path:+$prepend_path/}$relative_path" >> $UBOOT_SOURCE
+            echo "$load_cmd $memaddr $load_path" >> $UBOOT_SOURCE
             add_size_from_file $filename
         fi
     fi
@@ -821,6 +933,11 @@ function check_file_type()
 {
     local filename=$1
     local type="$2"
+
+    if is_target_path "$filename"
+    then
+        return
+    fi
 
     if [ ! -f $filename ]
     then
@@ -861,6 +978,11 @@ function check_compressed_file_type()
     local filename=$1
     local type="$2"
     local file_type
+
+    if is_target_path "$filename"
+    then
+        return
+    fi
 
     if [ ! -f $filename ]
     then
@@ -1503,6 +1625,10 @@ function print_help
     echo "	PREPEND_PATH - path to be appended before file names to match deploy location within rootfs"
     echo "	-h - prints out the help message and exits "
     echo "	-s - let U-Boot calculate binary images load addresses/sizes dynamically"
+    echo "Target paths:"
+    echo "	a path prefixed with \"target:\" names a file that only exists on the"
+    echo "	target storage: it is passed to U-Boot verbatim and not validated"
+    echo "	here, which requires -s and rules out FIT images"
     echo "Defaults:"
     echo "	CONFIG_FILE=$cfg_file, UBOOT_TYPE=\"LOAD_CMD\" env var, DIRECTORY=$uboot_dir"
     echo "Example:"
@@ -1637,6 +1763,11 @@ then
     linux_config
 else
     echo "Neither a Xen or Linux kernel is specified, exiting"
+    exit 1
+fi
+
+if ! check_target_paths
+then
     exit 1
 fi
 
